@@ -1,7 +1,77 @@
-import React from 'react';
-import Link from 'next/link';
+'use client';
 
-export default function CemeteryMap() {
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import CemeteryMap from '@/components/CemeteryMap';
+import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
+
+export default function CemeteryMapPage() {
+  const [plots, setPlots] = useState<PlotWithDetails[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedSection, setSelectedSection] = useState('all');
+  const [viewMode, setViewMode] = useState('standard');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedPlot, setSelectedPlot] = useState<PlotWithDetails | null>(null);
+
+  useEffect(() => {
+    loadPlots();
+  }, []);
+
+  const loadPlots = async () => {
+    try {
+      setLoading(true);
+      const data = await plotsAPI.getAllPlots();
+      setPlots(data);
+    } catch (error) {
+      console.error('Error loading plots:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSectionChange = async (section: string) => {
+    setSelectedSection(section);
+    if (section === 'all') {
+      loadPlots();
+    } else {
+      try {
+        setLoading(true);
+        const data = await plotsAPI.getPlotsBySection(section.toUpperCase());
+        setPlots(data);
+      } catch (error) {
+        console.error('Error loading plots by section:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      loadPlots();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const data = await plotsAPI.searchByPlotNumber(searchTerm);
+      setPlots(data);
+    } catch (error) {
+      console.error('Error searching plots:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredPlots = plots.filter(plot => {
+    if (viewMode === 'cremation') {
+      return plot.plot_type === 'cremation';
+    } else if (viewMode === 'hybrid') {
+      return plot.plot_type === 'hybrid';
+    }
+    return true; // standard view shows all
+  });
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       <header className="w-full bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
@@ -42,6 +112,8 @@ export default function CemeteryMap() {
               </label>
               <select
                 id="section-select"
+                value={selectedSection}
+                onChange={(e) => handleSectionChange(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
               >
                 <option value="all">All Sections</option>
@@ -61,6 +133,8 @@ export default function CemeteryMap() {
               </label>
               <select
                 id="view-mode"
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
               >
                 <option value="standard">Standard View</option>
@@ -76,24 +150,43 @@ export default function CemeteryMap() {
                 <input
                   type="text"
                   id="search"
-                  placeholder="Search by name or plot number"
+                  placeholder="Search by plot number"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
                 />
-                <button className="absolute right-2 top-2 text-gray-500 dark:text-gray-400">
+                <button 
+                  onClick={handleSearch}
+                  className="absolute right-2 top-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                >
                   🔍
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg h-[500px] flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-gray-500 dark:text-gray-400 mb-4">Interactive cemetery map will be displayed here</p>
-              <p className="text-sm text-gray-400 dark:text-gray-500">Map data loading from database</p>
+          {loading ? (
+            <div className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg h-[500px] flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-500 dark:text-gray-400">Loading cemetery map...</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg h-[500px]">
+              <CemeteryMap 
+                plots={filteredPlots} 
+                onPlotSelect={setSelectedPlot}
+                selectedSection={selectedSection}
+              />
+            </div>
+          )}
 
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex justify-between items-center">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {filteredPlots.length} plot{filteredPlots.length !== 1 ? 's' : ''}
+            </div>
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 inline-flex">
               <div className="flex items-center mr-4">
                 <span className="inline-block w-4 h-4 bg-green-500 rounded-full mr-2"></span>
@@ -117,10 +210,70 @@ export default function CemeteryMap() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-black dark:text-white mb-4">Plot Information</h2>
-          <p className="text-gray-600 dark:text-gray-300 mb-4">
-            Select a plot on the map to view detailed information. You can click on any plot to see its status, 
-            owner information, and any deceased records associated with it.
-          </p>
+          {selectedPlot ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Plot Number</p>
+                  <p className="font-medium text-black dark:text-white">{selectedPlot.plot_number}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Section</p>
+                  <p className="font-medium text-black dark:text-white">Section {selectedPlot.section}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
+                  <p className={`font-medium ${
+                    selectedPlot.status === 'available' ? 'text-green-600' :
+                    selectedPlot.status === 'reserved' ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`}>
+                    {selectedPlot.status.charAt(0).toUpperCase() + selectedPlot.status.slice(1)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Type</p>
+                  <p className="font-medium text-black dark:text-white">
+                    {selectedPlot.plot_type.charAt(0).toUpperCase() + selectedPlot.plot_type.slice(1)}
+                  </p>
+                </div>
+                {selectedPlot.price && (
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Price</p>
+                    <p className="font-medium text-black dark:text-white">${selectedPlot.price.toLocaleString()}</p>
+                  </div>
+                )}
+                {selectedPlot.owner_name && (
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Owner</p>
+                    <p className="font-medium text-black dark:text-white">{selectedPlot.owner_name}</p>
+                  </div>
+                )}
+              </div>
+              {selectedPlot.deceased_records && selectedPlot.deceased_records.length > 0 && (
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Interred Individuals:</p>
+                  {selectedPlot.deceased_records.map((deceased: any) => (
+                    <div key={deceased.id} className="mb-2">
+                      <p className="font-medium text-black dark:text-white">
+                        {deceased.first_name} {deceased.middle_name ? deceased.middle_name + ' ' : ''}{deceased.last_name}
+                      </p>
+                      {deceased.birth_date && deceased.death_date && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {new Date(deceased.birth_date).toLocaleDateString()} - {new Date(deceased.death_date).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-600 dark:text-gray-300">
+              Select a plot on the map to view detailed information. You can click on any plot to see its status, 
+              owner information, and any deceased records associated with it.
+            </p>
+          )}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               For assistance with plot selection or burial arrangements, please contact the cemetery office.
