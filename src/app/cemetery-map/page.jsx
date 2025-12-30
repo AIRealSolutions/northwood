@@ -1,7 +1,7 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { supabase, fetchCemeterySections, fetchPlotsBySection } from '@/lib/supabaseClient';
 
 // Define plot status colors
 const statusColors = {
@@ -23,10 +23,50 @@ const sectionMaps = {
   'H': '/cemetery-maps/section-g-h.jpeg'
 };
 
+// Mock data for sections
+const mockSections = [
+  { section_id: 'A', name: 'Section A' },
+  { section_id: 'B', name: 'Section B' },
+  { section_id: 'C', name: 'Section C' },
+  { section_id: 'D', name: 'Section D' },
+  { section_id: 'E', name: 'Section E' },
+  { section_id: 'F', name: 'Section F' },
+  { section_id: 'G', name: 'Section G' },
+  { section_id: 'H', name: 'Section H' }
+];
+
+// Mock data for plots
+const mockPlots = {
+  'A': [
+    { plot_id: 'A-001', section_id: 'A', row: '1', number: '1', status: 'available', coordinates: { x: 100, y: 150 } },
+    { plot_id: 'A-002', section_id: 'A', row: '1', number: '2', status: 'reserved', coordinates: { x: 150, y: 150 } },
+    { plot_id: 'A-003', section_id: 'A', row: '1', number: '3', status: 'occupied', coordinates: { x: 200, y: 150 },
+      plot_assignments: [{ 
+        deceased: { first_name: 'John', last_name: 'Smith', birth_date: '1945-03-15', death_date: '2020-07-22' },
+        owners: { first_name: 'Mary', last_name: 'Smith' }
+      }]
+    },
+    { plot_id: 'A-004', section_id: 'A', row: '1', number: '4', status: 'cremation', coordinates: { x: 250, y: 150 } }
+  ],
+  'B': [
+    { plot_id: 'B-001', section_id: 'B', row: '1', number: '1', status: 'available', coordinates: { x: 100, y: 150 } },
+    { plot_id: 'B-002', section_id: 'B', row: '1', number: '2', status: 'available', coordinates: { x: 150, y: 150 } }
+  ],
+  'G': [
+    { plot_id: 'G-001', section_id: 'G', row: '1', number: '1', status: 'available', coordinates: { x: 300, y: 350 } },
+    { plot_id: 'G-002', section_id: 'G', row: '1', number: '2', status: 'reserved', coordinates: { x: 350, y: 350 } },
+    { plot_id: 'G-003', section_id: 'G', row: '1', number: '3', status: 'occupied', coordinates: { x: 400, y: 350 } }
+  ],
+  'H': [
+    { plot_id: 'H-001', section_id: 'H', row: '1', number: '1', status: 'available', coordinates: { x: 500, y: 450 } },
+    { plot_id: 'H-002', section_id: 'H', row: '1', number: '2', status: 'cremation', coordinates: { x: 550, y: 450 } }
+  ]
+};
+
 export default function CemeteryMap() {
   // State variables
-  const [sections, setSections] = useState([]);
-  const [selectedSection, setSelectedSection] = useState(null);
+  const [sections, setSections] = useState(mockSections);
+  const [selectedSection, setSelectedSection] = useState('A');
   const [plots, setPlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,51 +76,30 @@ export default function CemeteryMap() {
   const [mapImage, setMapImage] = useState('');
   const [imageError, setImageError] = useState(false);
 
-  // Fetch cemetery sections on component mount
-  useEffect(() => {
-    async function loadSections() {
-      setLoading(true);
-      try {
-        const sectionsData = await fetchCemeterySections();
-        setSections(sectionsData);
-        
-        // Select the first section by default if available
-        if (sectionsData.length > 0) {
-          setSelectedSection(sectionsData[0].section_id);
-        }
-      } catch (err) {
-        console.error('Error loading sections:', err);
-        setError('Failed to load cemetery sections');
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    loadSections();
-  }, []);
-
-  // Fetch plots when selected section changes
+  // Load plots when selected section changes
   useEffect(() => {
     if (!selectedSection) return;
     
-    async function loadPlots() {
-      setLoading(true);
+    // Simulate loading
+    setLoading(true);
+    
+    // Set timeout to simulate API call
+    setTimeout(() => {
       try {
-        const plotsData = await fetchPlotsBySection(selectedSection);
-        setPlots(plotsData);
+        // Get plots for the selected section from mock data
+        const sectionPlots = mockPlots[selectedSection] || [];
+        setPlots(sectionPlots);
         
         // Set the map image based on the selected section
         setMapImage(sectionMaps[selectedSection] || '');
         setImageError(false);
+        setLoading(false);
       } catch (err) {
         console.error(`Error loading plots for section ${selectedSection}:`, err);
         setError(`Failed to load plots for section ${selectedSection}`);
-      } finally {
         setLoading(false);
       }
-    }
-    
-    loadPlots();
+    }, 500);
   }, [selectedSection]);
 
   // Handle section change
@@ -113,22 +132,6 @@ export default function CemeteryMap() {
     if (!dateString) return 'Unknown';
     const date = new Date(dateString);
     return date.toLocaleDateString();
-  };
-
-  // Get deceased name from plot
-  const getDeceasedName = (plot) => {
-    if (!plot.plot_assignments || plot.plot_assignments.length === 0) return 'None';
-    const assignment = plot.plot_assignments[0];
-    if (!assignment.deceased) return 'None';
-    return `${assignment.deceased.first_name} ${assignment.deceased.last_name}`;
-  };
-
-  // Get owner name from plot
-  const getOwnerName = (plot) => {
-    if (!plot.plot_assignments || plot.plot_assignments.length === 0) return 'None';
-    const assignment = plot.plot_assignments[0];
-    if (!assignment.owners) return 'None';
-    return `${assignment.owners.first_name} ${assignment.owners.last_name}`;
   };
 
   // Filter plots based on search term and view mode
