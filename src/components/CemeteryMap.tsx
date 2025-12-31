@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { plotsAPI, Plot } from '@/lib/supabase';
+import { plotsAPI, Plot, PlotWithDetails } from '@/lib/supabase';
 
 interface CemeteryMapProps {
   onPlotSelect?: (plot: Plot | null) => void;
@@ -45,12 +45,12 @@ export const getEastRoad = (section: string): string => {
 
 export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryMapProps) {
   const [sectionStats, setSectionStats] = useState<Record<string, { total: number; occupied: number; available: number }>>({});
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const [plots, setPlots] = useState<PlotWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Plot[]>([]);
+  const [searchResults, setSearchResults] = useState<PlotWithDetails[]>([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [hoveredPlot, setHoveredPlot] = useState<Plot | null>(null);
+  const [hoveredPlot, setHoveredPlot] = useState<PlotWithDetails | null>(null);
 
   useEffect(() => {
     loadSectionStats();
@@ -126,7 +126,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
     }
   };
 
-  const getDeceasedName = (plot: Plot) => {
+  const getDeceasedName = (plot: PlotWithDetails) => {
     const deceased = plot.deceased_records?.[0];
     if (deceased) {
       return `${deceased.first_name} ${deceased.last_name}`;
