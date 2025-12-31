@@ -853,12 +853,12 @@ FROM plots WHERE plot_number = 'NW-E-021-6'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO deceased_records (plot_id, first_name, middle_name, last_name, maiden_name, birth_date, death_date, notes)
-SELECT id, 'Martha', 'L.', 'Joyce', NULL, '0000-01-01', '1988-12-15', NULL
+SELECT id, 'Martha', 'L.', 'Joyce', NULL, NULL, '1988-12-15', NULL
 FROM plots WHERE plot_number = 'NW-E-022-5'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO deceased_records (plot_id, first_name, middle_name, last_name, maiden_name, birth_date, death_date, notes)
-SELECT id, 'Eugene', 'W.', 'Joyce', NULL, '0000-01-01', '1978-09-04', NULL
+SELECT id, 'Eugene', 'W.', 'Joyce', NULL, NULL, '1978-09-04', NULL
 FROM plots WHERE plot_number = 'NW-E-022-6'
 ON CONFLICT DO NOTHING;
 
