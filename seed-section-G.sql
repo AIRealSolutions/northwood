@@ -43,10 +43,10 @@ INSERT INTO plots (plot_number, section, row_number, plot_position, plot_type, s
 ('NW-G-021-2', 'G', 21, 2, 'standard', 'available', 4.0, 10.0, 'Hazel  (Mrs.) Watts', 'Rt. 1 Box 10, Southport, NC, 28461-0010', '1975-02-12'),
 ('NW-G-021-3', 'G', 21, 3, 'standard', 'available', 4.0, 10.0, 'Hazel  (Mrs.) Watts', 'Rt. 1 Box 10, Southport, NC, 28461-0010', '1975-02-12'),
 ('NW-G-021-4', 'G', 21, 4, 'standard', 'available', 4.0, 10.0, 'Hazel  (Mrs.) Watts', 'Rt. 1 Box 10, Southport, NC, 28461-0010', '1975-02-12'),
-('NW-G-022-1', 'G', 22, 1, 'standard', 'occupied', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-31'),
-('NW-G-022-2', 'G', 22, 2, 'standard', 'occupied', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-31'),
-('NW-G-022-3', 'G', 22, 3, 'standard', 'available', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-31'),
-('NW-G-022-4', 'G', 22, 4, 'standard', 'available', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-31'),
+('NW-G-022-1', 'G', 22, 1, 'standard', 'occupied', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-30'),
+('NW-G-022-2', 'G', 22, 2, 'standard', 'occupied', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-30'),
+('NW-G-022-3', 'G', 22, 3, 'standard', 'available', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-30'),
+('NW-G-022-4', 'G', 22, 4, 'standard', 'available', 4.0, 10.0, 'Lucielle L. Causey', '9th  Street East, Long Beach, NC, 28465', '1986-04-30'),
 ('NW-G-023-1', 'G', 23, 1, 'standard', 'occupied', 4.0, 10.0, 'Eddie Spencer', 'Jabbertown Rd., Southport, NC, 28461', '1979-07-13'),
 ('NW-G-023-2', 'G', 23, 2, 'standard', 'occupied', 4.0, 10.0, 'Eddie Spencer', 'Jabbertown Rd., Southport, NC, 28461', '1979-07-13'),
 ('NW-G-023-3', 'G', 23, 3, 'standard', 'available', 4.0, 10.0, 'Eddie Spencer', 'Jabbertown Rd., Southport, NC, 28461', '1979-07-13'),
@@ -1857,7 +1857,7 @@ FROM plots WHERE plot_number = 'NW-G-132-2'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO deceased_records (plot_id, first_name, middle_name, last_name, maiden_name, birth_date, death_date, notes)
-SELECT id, 'Richard', 'Alvey', 'Partello,', NULL, '1968-02-29', '2011-12-16', 'III'
+SELECT id, 'Richard', 'Alvey', 'Partello,', NULL, '1968-02-28', '2011-12-16', 'III'
 FROM plots WHERE plot_number = 'NW-G-135-2'
 ON CONFLICT DO NOTHING;
 
@@ -3352,7 +3352,7 @@ FROM plots WHERE plot_number = 'NW-G-330-2'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO deceased_records (plot_id, first_name, middle_name, last_name, maiden_name, birth_date, death_date, notes)
-SELECT id, 'William', 'Samuel', 'Byrd', NULL, '1936-02-29', '2010-10-25', NULL
+SELECT id, 'William', 'Samuel', 'Byrd', NULL, '1936-02-28', '2010-10-25', NULL
 FROM plots WHERE plot_number = 'NW-G-331-1'
 ON CONFLICT DO NOTHING;
 
@@ -3672,7 +3672,7 @@ FROM plots WHERE plot_number = 'NW-G-371-3'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO deceased_records (plot_id, first_name, middle_name, last_name, maiden_name, birth_date, death_date, notes)
-SELECT id, 'James', 'Wilbur', 'Edwards', NULL, '1920-02-29', '1983-01-18', NULL
+SELECT id, 'James', 'Wilbur', 'Edwards', NULL, '1920-02-28', '1983-01-18', NULL
 FROM plots WHERE plot_number = 'NW-G-372-3'
 ON CONFLICT DO NOTHING;
 

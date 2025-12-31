@@ -1433,7 +1433,7 @@ FROM plots WHERE plot_number = 'NW-D-073-6'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO deceased_records (plot_id, first_name, middle_name, last_name, maiden_name, birth_date, death_date, notes)
-SELECT id, 'Mary', 'Virginia', 'Powers', NULL, '1924-06-31', '1966-02-23', NULL
+SELECT id, 'Mary', 'Virginia', 'Powers', NULL, '1924-06-30', '1966-02-23', NULL
 FROM plots WHERE plot_number = 'NW-D-073-7'
 ON CONFLICT DO NOTHING;
 
