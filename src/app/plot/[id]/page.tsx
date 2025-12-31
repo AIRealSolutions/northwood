@@ -61,19 +61,19 @@ export default function PlotDetailsPage() {
     return age;
   };
 
-  // Map section letters to road names
-  const getRoadName = (section: string): string => {
-    const roadMap: Record<string, string> = {
-      'A': 'Azalea',
-      'B': 'Beech',
-      'C': 'Chinquapin',
-      'D': 'Dogwood',
-      'E': 'Elm',
-      'F': 'Fig',
-      'G': 'Gardenia',
-      'H': 'Heather',
+  // Map section letters to road names (sections are BETWEEN roads)
+  const getSectionRoads = (section: string): { west: string; east: string } => {
+    const roadMap: Record<string, { west: string; east: string }> = {
+      'A': { west: 'Azalea', east: 'Beech' },
+      'B': { west: 'Beech', east: 'Chinquapin' },
+      'C': { west: 'Chinquapin', east: 'Dogwood' },
+      'D': { west: 'Dogwood', east: 'Elm' },
+      'E': { west: 'Elm', east: 'Fig' },
+      'F': { west: 'Fig', east: 'Gardenia' },
+      'G': { west: 'Gardenia', east: 'Heather' },
+      'H': { west: 'Heather', east: 'Hibiscus' },
     };
-    return roadMap[section.toUpperCase()] || section;
+    return roadMap[section.toUpperCase()] || { west: section, east: section };
   };
 
   const getStatusColor = (status: string) => {
@@ -174,7 +174,7 @@ export default function PlotDetailsPage() {
                 Plot {plot.plot_number}
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                Section {plot.section} • {getRoadName(plot.section)} Road • Row {plot.row_number} • Position {plot.plot_position}
+                Section {plot.section} (Between {getSectionRoads(plot.section).west} & {getSectionRoads(plot.section).east}) • Row {plot.row_number} • Position {plot.plot_position}
               </p>
             </div>
             <div className="flex items-center gap-4">

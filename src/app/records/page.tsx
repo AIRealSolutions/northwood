@@ -91,17 +91,17 @@ export default function RecordsPage() {
       .join(' ');
   };
 
-  // Map section letters to road names
-  const getRoadName = (section: string): string => {
+  // Map section letters to road names (sections are BETWEEN roads)
+  const getSectionRoads = (section: string): string => {
     const roadMap: Record<string, string> = {
-      'A': 'Azalea',
-      'B': 'Beech',
-      'C': 'Chinquapin',
-      'D': 'Dogwood',
-      'E': 'Elm',
-      'F': 'Fig',
-      'G': 'Gardenia',
-      'H': 'Heather',
+      'A': 'Azalea-Beech',
+      'B': 'Beech-Chinquapin',
+      'C': 'Chinquapin-Dogwood',
+      'D': 'Dogwood-Elm',
+      'E': 'Elm-Fig',
+      'F': 'Fig-Gardenia',
+      'G': 'Gardenia-Heather',
+      'H': 'Heather-Hibiscus',
     };
     return roadMap[section?.toUpperCase()] || section || 'Unknown';
   };
@@ -288,9 +288,9 @@ export default function RecordsPage() {
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                             <div>
-                              <span className="font-medium">{getRoadName(record.plots?.section || '')}</span>
+                              <span className="font-medium">{record.plots?.section || '—'}</span>
                               {record.plots?.section && (
-                                <span className="text-gray-400 ml-1">({record.plots.section})</span>
+                                <span className="text-gray-400 ml-1 text-xs">({getSectionRoads(record.plots.section)})</span>
                               )}
                             </div>
                           </td>
@@ -373,8 +373,8 @@ export default function RecordsPage() {
                         <div className="col-span-2">
                           <span className="text-gray-500 dark:text-gray-400">Location:</span>{' '}
                           <span className="text-gray-700 dark:text-gray-300">
-                            {getRoadName(record.plots?.section || '')} Road
-                            {record.plots?.section && ` (Section ${record.plots.section})`}
+                            Section {record.plots?.section || '—'}
+                            {record.plots?.section && ` (${getSectionRoads(record.plots.section)})`}
                           </span>
                         </div>
                       </div>
