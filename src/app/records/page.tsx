@@ -1,5 +1,8 @@
 'use client';
 
+// Prevent static prerendering - this page requires runtime data
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { deceasedAPI, DeceasedWithPlot } from '@/lib/supabase';

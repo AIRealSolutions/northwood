@@ -1,9 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Get environment variables with fallbacks for build time
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create client only if we have valid credentials
+let supabase: SupabaseClient | null = null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+}
+
+// Helper to get supabase client (throws if not available)
+const getSupabase = (): SupabaseClient => {
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Check environment variables.');
+  }
+  return supabase;
+};
 
 // TypeScript types for database tables
 export interface Plot {
@@ -75,7 +89,7 @@ export interface DeceasedWithPlot extends DeceasedRecord {
 export const plotsAPI = {
   // Get plots by section (optimized - don't load all 5000+ at once)
   async getPlotsBySection(section: string): Promise<PlotWithDetails[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('plots')
       .select(`
         *,
@@ -91,7 +105,7 @@ export const plotsAPI = {
 
   // Get plot by ID
   async getPlotById(id: string): Promise<PlotWithDetails | null> {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('plots')
       .select(`
         *,
@@ -106,7 +120,7 @@ export const plotsAPI = {
 
   // Search plots by plot number
   async searchByPlotNumber(plotNumber: string): Promise<PlotWithDetails[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('plots')
       .select(`
         *,
@@ -121,7 +135,7 @@ export const plotsAPI = {
 
   // Get section summary (counts by status)
   async getSectionSummary(): Promise<any[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('plots')
       .select('section, status')
       .order('section');
@@ -151,7 +165,7 @@ export const plotsAPI = {
     page: number = 1, 
     pageSize: number = 50
   ): Promise<{ data: PlotWithDetails[]; count: number }> {
-    let query = supabase
+    let query = getSupabase()
       .from('plots')
       .select(`
         *,
@@ -184,7 +198,7 @@ export const deceasedAPI = {
     searchTerm?: string,
     section?: string
   ): Promise<{ data: DeceasedWithPlot[]; count: number }> {
-    let query = supabase
+    let query = getSupabase()
       .from('deceased_records')
       .select(`
         *,
@@ -219,7 +233,7 @@ export const deceasedAPI = {
 
   // Search deceased records by name
   async searchByName(searchTerm: string, limit: number = 100): Promise<DeceasedWithPlot[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('deceased_records')
       .select(`
         *,
@@ -236,7 +250,7 @@ export const deceasedAPI = {
 
   // Get deceased records by section
   async getRecordsBySection(section: string): Promise<DeceasedWithPlot[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('deceased_records')
       .select(`
         *,
@@ -252,7 +266,7 @@ export const deceasedAPI = {
 
   // Filter by date range
   async filterByDateRange(startDate: string, endDate: string): Promise<DeceasedWithPlot[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('deceased_records')
       .select(`
         *,
@@ -269,7 +283,7 @@ export const deceasedAPI = {
 
   // Get total counts
   async getTotalCounts(): Promise<{ total: number; bySection: Record<string, number> }> {
-    const { data, error, count } = await supabase
+    const { data, error, count } = await getSupabase()
       .from('deceased_records')
       .select(`
         id,
@@ -287,3 +301,6 @@ export const deceasedAPI = {
     return { total: count || 0, bySection };
   }
 };
+
+// Export the supabase client for direct use if needed
+export { supabase };
