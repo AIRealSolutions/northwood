@@ -61,6 +61,21 @@ export default function PlotDetailsPage() {
     return age;
   };
 
+  // Map section letters to road names
+  const getRoadName = (section: string): string => {
+    const roadMap: Record<string, string> = {
+      'A': 'Azalea',
+      'B': 'Beech',
+      'C': 'Chinquapin',
+      'D': 'Dogwood',
+      'E': 'Elm',
+      'F': 'Fig',
+      'G': 'Gardenia',
+      'H': 'Heather',
+    };
+    return roadMap[section.toUpperCase()] || section;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'available': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
@@ -159,7 +174,7 @@ export default function PlotDetailsPage() {
                 Plot {plot.plot_number}
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                Section {plot.section} • Row {plot.row_number} • Position {plot.plot_position}
+                Section {plot.section} • {getRoadName(plot.section)} Road • Row {plot.row_number} • Position {plot.plot_position}
               </p>
             </div>
             <div className="flex items-center gap-4">

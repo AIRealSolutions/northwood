@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { PlotWithDetails } from '@/lib/supabase';
 
 interface CemeteryMapProps {
@@ -11,28 +10,33 @@ interface CemeteryMapProps {
   selectedSection?: string;
 }
 
-// Accurate cemetery layout based on photos
-// Streets run through the CENTER of sections, not between them
-// Exception: Entrance street (A Street) at top, Hydrangea at bottom of H
-const CEMETERY_STREETS = [
-  { name: 'A Street', position: 'entrance', description: 'Main Entrance' },
-  { name: 'Northwood Ave', throughSection: 'A-B', description: 'Through Sections A & B' },
-  { name: 'Magnolia Ave', throughSection: 'C-D', description: 'Through Sections C & D' },
-  { name: 'Dogwood Ave', throughSection: 'E-F', description: 'Through Sections E & F' },
-  { name: 'Camellia Ave', throughSection: 'G', description: 'Through Section G' },
-  { name: 'Azalea Ave', throughSection: 'H-upper', description: 'Through Section H (upper)' },
-  { name: 'Hydrangea Ave', position: 'end', description: 'End of Section H' },
+// Correct cemetery layout based on user description
+// Roads are named after flowers/trees, running East-West
+// Each road has 2 plots deep on each side
+// Sections are identified by the road they're adjacent to
+const CEMETERY_ROADS = [
+  { name: 'Fodale', type: 'border', description: 'Main Street (North Border)' },
+  { name: 'Azalea', section: 'A', description: 'Section A - Azalea Road' },
+  { name: 'Beech', section: 'B', description: 'Section B - Beech Road' },
+  { name: 'Chinquapin', section: 'C', description: 'Section C - Chinquapin Road' },
+  { name: 'Dogwood', section: 'D', description: 'Section D - Dogwood Road' },
+  { name: 'Elm', section: 'E', description: 'Section E - Elm Road' },
+  { name: 'Fig', section: 'F', description: 'Section F - Fig Road' },
+  { name: 'Gardenia', section: 'G', description: 'Section G - Gardenia Road' },
+  { name: 'Heather', section: 'H', description: 'Section H - Heather Road' },
+  { name: 'Hibiscus', type: 'road', description: 'Hibiscus Road' },
+  { name: 'Sweet Bay', type: 'border', description: 'South Border' },
 ];
 
-const SECTION_INFO = {
-  A: { plots: 578, street: 'Northwood Ave', row: 0, col: 0 },
-  B: { plots: 592, street: 'Northwood Ave', row: 0, col: 1 },
-  C: { plots: 593, street: 'Magnolia Ave', row: 1, col: 0 },
-  D: { plots: 592, street: 'Magnolia Ave', row: 1, col: 1 },
-  E: { plots: 592, street: 'Dogwood Ave', row: 2, col: 0 },
-  F: { plots: 296, street: 'Dogwood Ave', row: 2, col: 1 },
-  G: { plots: 871, street: 'Camellia Ave', row: 3, col: 0, span: 2 },
-  H: { plots: 1035, street: 'Azalea Ave', row: 4, col: 0, span: 2 },
+const SECTION_INFO: Record<string, { plots: number; road: string; color: string }> = {
+  A: { plots: 578, road: 'Azalea', color: 'bg-pink-100 dark:bg-pink-900/30' },
+  B: { plots: 592, road: 'Beech', color: 'bg-green-100 dark:bg-green-900/30' },
+  C: { plots: 593, road: 'Chinquapin', color: 'bg-amber-100 dark:bg-amber-900/30' },
+  D: { plots: 592, road: 'Dogwood', color: 'bg-rose-100 dark:bg-rose-900/30' },
+  E: { plots: 592, road: 'Elm', color: 'bg-emerald-100 dark:bg-emerald-900/30' },
+  F: { plots: 296, road: 'Fig', color: 'bg-purple-100 dark:bg-purple-900/30' },
+  G: { plots: 871, road: 'Gardenia', color: 'bg-yellow-100 dark:bg-yellow-900/30' },
+  H: { plots: 1035, road: 'Heather', color: 'bg-indigo-100 dark:bg-indigo-900/30' },
 };
 
 // Cemetery photos for gallery
@@ -76,13 +80,6 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
 
   const rows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
 
-  const handlePlotClick = (plot: PlotWithDetails) => {
-    setSelectedPlot(plot);
-    if (onPlotSelect) {
-      onPlotSelect(plot);
-    }
-  };
-
   const getPlotColor = (plot: PlotWithDetails) => {
     if (plot.status === 'available') {
       return plot.plot_type === 'cremation' ? 'bg-purple-500' : 'bg-green-500';
@@ -122,65 +119,78 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
     };
   };
 
-  // Section card component with street running through it
-  const SectionCard = ({ section, isLarge = false }: { section: string; isLarge?: boolean }) => {
+  // Road component
+  const Road = ({ name, isMain = false }: { name: string; isMain?: boolean }) => (
+    <div className={`
+      w-full py-2 text-center font-semibold text-xs
+      ${isMain 
+        ? 'bg-gray-700 dark:bg-gray-600 text-white' 
+        : 'bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100'
+      }
+    `}>
+      {name.toUpperCase()} {isMain ? '' : 'ROAD'}
+    </div>
+  );
+
+  // Section row component - shows 2 plots deep on each side of the road
+  const SectionRow = ({ section }: { section: string }) => {
     const stats = getSectionStats(section);
-    const info = SECTION_INFO[section as keyof typeof SECTION_INFO];
+    const info = SECTION_INFO[section];
     const isHovered = hoveredSection === section;
     
     return (
-      <button
-        onClick={() => onPlotSelect && onPlotSelect({ section } as any)}
-        onMouseEnter={() => setHoveredSection(section)}
-        onMouseLeave={() => setHoveredSection(null)}
-        className={`
-          relative rounded-lg transition-all duration-200 border-2 overflow-hidden
-          ${isLarge ? 'col-span-2' : ''}
-          ${isHovered 
-            ? 'bg-green-50 dark:bg-green-900/30 border-green-500 scale-[1.02] shadow-lg z-10' 
-            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-green-400'
-          }
-        `}
-      >
-        {/* Street running through the center */}
-        <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-6 bg-amber-200 dark:bg-amber-900/60 flex items-center justify-center z-0">
-          <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-200 whitespace-nowrap">
-            {info.street}
-          </span>
-        </div>
-        
-        {/* Section content */}
-        <div className="relative z-10 p-4">
-          {/* Top half - plots above street */}
-          <div className="mb-3 pb-3">
-            <div className="text-2xl font-bold text-gray-800 dark:text-white">
-              Section {section}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {stats.total > 0 ? stats.total : info.plots} plots
-            </div>
+      <div className="flex items-stretch">
+        {/* North side plots (2 deep) */}
+        <button
+          onClick={() => onPlotSelect && onPlotSelect({ section } as any)}
+          onMouseEnter={() => setHoveredSection(section)}
+          onMouseLeave={() => setHoveredSection(null)}
+          className={`
+            flex-1 p-3 transition-all duration-200 border-y border-l border-gray-300 dark:border-gray-600
+            ${info.color}
+            ${isHovered ? 'scale-[1.02] shadow-lg z-10 border-green-500' : 'hover:border-green-400'}
+          `}
+        >
+          <div className="text-xs text-gray-600 dark:text-gray-400">North Side</div>
+          <div className="text-sm font-medium text-gray-800 dark:text-gray-200">2 plots deep</div>
+        </button>
+
+        {/* Road with section label */}
+        <div className={`
+          w-32 flex flex-col items-center justify-center
+          bg-amber-200 dark:bg-amber-800 border-y border-gray-300 dark:border-gray-600
+          ${isHovered ? 'bg-amber-300 dark:bg-amber-700' : ''}
+        `}>
+          <div className="text-lg font-bold text-gray-800 dark:text-white">
+            Section {section}
           </div>
-          
-          {/* Bottom half - stats below street */}
-          <div className="mt-3 pt-3">
-            <div className="flex justify-center gap-3 text-xs">
-              <span className="text-green-600 dark:text-green-400 font-medium">
-                ● {stats.available} avail
-              </span>
-              <span className="text-red-600 dark:text-red-400 font-medium">
-                ● {stats.occupied} used
-              </span>
-            </div>
-            {/* Occupancy bar */}
-            <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-green-500 to-green-600" 
-                style={{ width: `${stats.total > 0 ? (stats.available / stats.total) * 100 : 50}%` }}
-              />
-            </div>
+          <div className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+            {info.road} Rd
+          </div>
+          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+            {stats.total > 0 ? stats.total : info.plots} plots
+          </div>
+          <div className="flex gap-1 mt-1 text-[10px]">
+            <span className="text-green-700 dark:text-green-400">{stats.available} avail</span>
+            <span className="text-red-700 dark:text-red-400">{stats.occupied} used</span>
           </div>
         </div>
-      </button>
+
+        {/* South side plots (2 deep) */}
+        <button
+          onClick={() => onPlotSelect && onPlotSelect({ section } as any)}
+          onMouseEnter={() => setHoveredSection(section)}
+          onMouseLeave={() => setHoveredSection(null)}
+          className={`
+            flex-1 p-3 transition-all duration-200 border-y border-r border-gray-300 dark:border-gray-600
+            ${info.color}
+            ${isHovered ? 'scale-[1.02] shadow-lg z-10 border-green-500' : 'hover:border-green-400'}
+          `}
+        >
+          <div className="text-xs text-gray-600 dark:text-gray-400">South Side</div>
+          <div className="text-sm font-medium text-gray-800 dark:text-gray-200">2 plots deep</div>
+        </button>
+      </div>
     );
   };
 
@@ -223,48 +233,39 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
         )}
 
         {/* Visual Cemetery Map */}
-        <div className="max-w-4xl mx-auto">
-          {/* Main Entrance - A Street */}
-          <div className="bg-gray-700 dark:bg-gray-600 text-center py-3 rounded-t-lg mb-1">
-            <span className="text-sm font-bold text-white">
-              ↓ A STREET - MAIN ENTRANCE ↓
-            </span>
-          </div>
-
-          {/* Row 1: Sections A & B with Northwood Ave through center */}
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <SectionCard section="A" />
-            <SectionCard section="B" />
-          </div>
-
-          {/* Row 2: Sections C & D with Magnolia Ave through center */}
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <SectionCard section="C" />
-            <SectionCard section="D" />
-          </div>
-
-          {/* Row 3: Sections E & F with Dogwood Ave through center */}
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <SectionCard section="E" />
-            <SectionCard section="F" />
-          </div>
-
-          {/* Row 4: Section G (full width) with Camellia Ave through center */}
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <SectionCard section="G" isLarge />
-          </div>
-
-          {/* Row 5: Section H (full width) with Azalea Ave through center */}
-          <div className="grid grid-cols-2 gap-3 mb-1">
-            <SectionCard section="H" isLarge />
-          </div>
-
-          {/* End - Hydrangea Ave */}
-          <div className="bg-purple-600 dark:bg-purple-800 text-center py-2 rounded-b-lg">
-            <span className="text-sm font-bold text-white">
-              HYDRANGEA AVE
-            </span>
-          </div>
+        <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          {/* North Border - Fodale (Main Street) */}
+          <Road name="Fodale - Main Street" isMain />
+          
+          {/* Section A - Azalea */}
+          <SectionRow section="A" />
+          
+          {/* Section B - Beech */}
+          <SectionRow section="B" />
+          
+          {/* Section C - Chinquapin */}
+          <SectionRow section="C" />
+          
+          {/* Section D - Dogwood */}
+          <SectionRow section="D" />
+          
+          {/* Section E - Elm */}
+          <SectionRow section="E" />
+          
+          {/* Section F - Fig */}
+          <SectionRow section="F" />
+          
+          {/* Section G - Gardenia */}
+          <SectionRow section="G" />
+          
+          {/* Section H - Heather */}
+          <SectionRow section="H" />
+          
+          {/* Hibiscus Road */}
+          <Road name="Hibiscus" />
+          
+          {/* South Border - Sweet Bay */}
+          <Road name="Sweet Bay - South Border" isMain />
         </div>
 
         {/* Legend */}
@@ -282,9 +283,15 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
             <span className="text-gray-700 dark:text-gray-300">Reserved</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-1 bg-amber-300 rounded"></div>
-            <span className="text-gray-700 dark:text-gray-300">Street</span>
+            <div className="w-6 h-3 bg-amber-200 dark:bg-amber-800 rounded"></div>
+            <span className="text-gray-700 dark:text-gray-300">Road</span>
           </div>
+        </div>
+
+        {/* Road Names Reference */}
+        <div className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
+          <p className="font-medium mb-1">Roads (North to South):</p>
+          <p>Fodale → Azalea → Beech → Chinquapin → Dogwood → Elm → Fig → Gardenia → Heather → Hibiscus → Sweet Bay</p>
         </div>
 
         {/* Total Stats */}
@@ -296,9 +303,11 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
   }
 
   // Section detail view with plot grid
+  const sectionInfo = SECTION_INFO[selectedSection.toUpperCase()];
+  
   return (
     <div className="relative w-full h-full bg-gray-100 dark:bg-gray-900 rounded-lg overflow-auto">
-      {/* Section header with street info */}
+      {/* Section header with road info */}
       <div className="sticky top-0 bg-gray-100 dark:bg-gray-900 p-3 border-b border-gray-200 dark:border-gray-700 z-10">
         <div className="flex justify-between items-center">
           <div>
@@ -306,7 +315,7 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
               Section {selectedSection.toUpperCase()} - {filteredPlots.length} plots
             </h3>
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              {SECTION_INFO[selectedSection.toUpperCase() as keyof typeof SECTION_INFO]?.street} runs through this section
+              Located on {sectionInfo?.road} Road • 2 plots deep on each side
             </p>
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -327,16 +336,16 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
           <div className="space-y-2">
             {rows.map((rowNum, index) => (
               <React.Fragment key={rowNum}>
-                {/* Show street indicator in the middle of the section */}
-                {index === Math.floor(rows.length / 2) && (
-                  <div className="bg-amber-200 dark:bg-amber-900/60 text-center py-1 rounded my-2">
-                    <span className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-                      ← {SECTION_INFO[selectedSection.toUpperCase() as keyof typeof SECTION_INFO]?.street} →
+                {/* Show road indicator after first 2 rows (north side) */}
+                {index === 2 && (
+                  <div className="bg-amber-200 dark:bg-amber-800 text-center py-2 rounded my-3">
+                    <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                      ← {sectionInfo?.road.toUpperCase()} ROAD →
                     </span>
                   </div>
                 )}
                 <div className="flex items-center gap-1">
-                  <div className="w-12 text-xs text-gray-500 dark:text-gray-400 font-medium text-right pr-2">
+                  <div className="w-16 text-xs text-gray-500 dark:text-gray-400 font-medium text-right pr-2">
                     Row {rowNum}
                   </div>
                   <div className="flex gap-1 flex-wrap">
@@ -391,9 +400,9 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
                     'text-red-600'
                   }>{plot.status}</span>
                 </p>
-                {plot.owner_name && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Owner: {plot.owner_name}</p>
-                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {sectionInfo?.road} Road, Row {plot.row_number}
+                </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Click to view details →</p>
               </div>
             );

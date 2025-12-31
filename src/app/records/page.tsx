@@ -91,6 +91,21 @@ export default function RecordsPage() {
       .join(' ');
   };
 
+  // Map section letters to road names
+  const getRoadName = (section: string): string => {
+    const roadMap: Record<string, string> = {
+      'A': 'Azalea',
+      'B': 'Beech',
+      'C': 'Chinquapin',
+      'D': 'Dogwood',
+      'E': 'Elm',
+      'F': 'Fig',
+      'G': 'Gardenia',
+      'H': 'Heather',
+    };
+    return roadMap[section?.toUpperCase()] || section || 'Unknown';
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
       <header className="w-full bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
@@ -227,7 +242,7 @@ export default function RecordsPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Death</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Plot</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Section</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Details</th>
                     </tr>
                   </thead>
@@ -272,7 +287,12 @@ export default function RecordsPage() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                            {record.plots?.section || '—'}
+                            <div>
+                              <span className="font-medium">{getRoadName(record.plots?.section || '')}</span>
+                              {record.plots?.section && (
+                                <span className="text-gray-400 ml-1">({record.plots.section})</span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-right">
                             {plotId ? (
@@ -349,6 +369,13 @@ export default function RecordsPage() {
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-gray-500 dark:text-gray-400">Location:</span>{' '}
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {getRoadName(record.plots?.section || '')} Road
+                            {record.plots?.section && ` (Section ${record.plots.section})`}
+                          </span>
                         </div>
                       </div>
                     </div>
