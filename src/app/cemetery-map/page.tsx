@@ -60,6 +60,16 @@ function CemeteryMapContent() {
     setSearchTerm('');
   };
 
+  // Handle plot selection from map (including section clicks)
+  const handlePlotSelectFromMap = (plot: PlotWithDetails) => {
+    // If it's just a section object (from clicking section in overview)
+    if (plot.section && !plot.id) {
+      handleSectionChange(plot.section.toLowerCase());
+    } else {
+      setSelectedPlot(plot);
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
       if (selectedSection !== 'all') {
@@ -220,8 +230,8 @@ function CemeteryMapContent() {
         ) : (
           <div className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg h-[500px]">
             <CemeteryMap 
-              plots={filteredPlots} 
-              onPlotSelect={setSelectedPlot}
+              plots={selectedSection === 'all' ? plots : filteredPlots} 
+              onPlotSelect={handlePlotSelectFromMap}
               selectedSection={selectedSection}
             />
           </div>

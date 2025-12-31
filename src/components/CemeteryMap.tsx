@@ -10,9 +10,32 @@ interface CemeteryMapProps {
   selectedSection?: string;
 }
 
+// Cemetery layout based on actual photos
+const CEMETERY_LAYOUT = {
+  streets: [
+    { name: 'Northwood Ave', orientation: 'horizontal', position: 'top' },
+    { name: 'Magnolia Ave', orientation: 'vertical', position: 'center' },
+    { name: 'Dogwood Ave', orientation: 'horizontal', position: 'upper-middle' },
+    { name: 'Jasmine Ave', orientation: 'vertical', position: 'center' },
+    { name: 'Camellia Ave', orientation: 'horizontal', position: 'lower-middle' },
+    { name: 'Azalea Ave', orientation: 'vertical', position: 'center' },
+  ],
+  sections: {
+    A: { row: 0, col: 0, plots: 578 },
+    B: { row: 0, col: 1, plots: 592 },
+    C: { row: 1, col: 0, plots: 593 },
+    D: { row: 1, col: 1, plots: 592 },
+    E: { row: 2, col: 0, plots: 592 },
+    F: { row: 2, col: 1, plots: 296 },
+    G: { row: 3, col: 0, plots: 871, span: 2 },
+    H: { row: 4, col: 0, plots: 1035, span: 2 },
+  }
+};
+
 export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: CemeteryMapProps) {
   const [hoveredPlot, setHoveredPlot] = useState<string | null>(null);
   const [selectedPlot, setSelectedPlot] = useState<PlotWithDetails | null>(null);
+  const [hoveredSection, setHoveredSection] = useState<string | null>(null);
 
   // Filter plots by selected section
   const filteredPlots = useMemo(() => {
@@ -77,61 +100,285 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
     return null;
   };
 
-  // If no section is selected, show section overview
+  // Calculate section stats
+  const getSectionStats = (sectionLetter: string) => {
+    const sectionPlots = plots.filter(p => p.section === sectionLetter);
+    return {
+      total: sectionPlots.length,
+      occupied: sectionPlots.filter(p => p.status === 'occupied').length,
+      available: sectionPlots.filter(p => p.status === 'available').length,
+      reserved: sectionPlots.filter(p => p.status === 'reserved').length,
+    };
+  };
+
+  // If no section is selected, show visual cemetery map
   if (!selectedSection || selectedSection === 'all') {
     return (
-      <div className="relative w-full h-full bg-gray-100 dark:bg-gray-900 rounded-lg overflow-auto p-4">
+      <div className="relative w-full h-full bg-gradient-to-b from-green-100 to-green-200 dark:from-gray-900 dark:to-gray-800 rounded-lg overflow-auto p-4">
+        {/* Cemetery Title */}
         <div className="text-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-            Select a section to view plots
+          <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+            Northwood Cemetery
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {plots.length.toLocaleString()} total plots loaded
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Southport, NC • Click a section to view plots
           </p>
         </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-          {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map(section => {
-            const sectionPlots = plots.filter(p => p.section === section);
-            const occupied = sectionPlots.filter(p => p.status === 'occupied').length;
-            const available = sectionPlots.filter(p => p.status === 'available').length;
-            
+
+        {/* Visual Cemetery Map */}
+        <div className="max-w-4xl mx-auto">
+          {/* Main Entrance - Northwood Ave */}
+          <div className="bg-amber-200 dark:bg-amber-900 text-center py-2 rounded-t-lg border-2 border-amber-400 dark:border-amber-700 mb-2">
+            <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              ↑ NORTHWOOD AVE (Main Entrance) ↑
+            </span>
+          </div>
+
+          {/* Row 1: Sections A & B */}
+          <div className="grid grid-cols-2 gap-4 mb-2">
+            {['A', 'B'].map(section => {
+              const stats = getSectionStats(section);
+              const isHovered = hoveredSection === section;
+              return (
+                <button
+                  key={section}
+                  onClick={() => onPlotSelect && onPlotSelect({ section } as any)}
+                  onMouseEnter={() => setHoveredSection(section)}
+                  onMouseLeave={() => setHoveredSection(null)}
+                  className={`
+                    relative p-4 rounded-lg transition-all duration-200 border-2
+                    ${isHovered 
+                      ? 'bg-blue-100 dark:bg-blue-900 border-blue-500 scale-105 shadow-lg' 
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                    }
+                  `}
+                >
+                  <div className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+                    Section {section}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    {stats.total} plots
+                  </div>
+                  <div className="flex justify-center gap-3 mt-2 text-xs">
+                    <span className="text-green-600 dark:text-green-400">
+                      ● {stats.available} available
+                    </span>
+                    <span className="text-red-600 dark:text-red-400">
+                      ● {stats.occupied} occupied
+                    </span>
+                  </div>
+                  {/* Occupancy bar */}
+                  <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-red-500 to-red-600" 
+                      style={{ width: `${stats.total > 0 ? (stats.occupied / stats.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Magnolia Ave */}
+          <div className="bg-amber-100 dark:bg-amber-900/50 text-center py-1 rounded border border-amber-300 dark:border-amber-700 mb-2">
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">MAGNOLIA AVE</span>
+          </div>
+
+          {/* Row 2: Sections C & D */}
+          <div className="grid grid-cols-2 gap-4 mb-2">
+            {['C', 'D'].map(section => {
+              const stats = getSectionStats(section);
+              const isHovered = hoveredSection === section;
+              return (
+                <button
+                  key={section}
+                  onClick={() => onPlotSelect && onPlotSelect({ section } as any)}
+                  onMouseEnter={() => setHoveredSection(section)}
+                  onMouseLeave={() => setHoveredSection(null)}
+                  className={`
+                    relative p-4 rounded-lg transition-all duration-200 border-2
+                    ${isHovered 
+                      ? 'bg-blue-100 dark:bg-blue-900 border-blue-500 scale-105 shadow-lg' 
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                    }
+                  `}
+                >
+                  <div className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+                    Section {section}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    {stats.total} plots
+                  </div>
+                  <div className="flex justify-center gap-3 mt-2 text-xs">
+                    <span className="text-green-600 dark:text-green-400">
+                      ● {stats.available} available
+                    </span>
+                    <span className="text-red-600 dark:text-red-400">
+                      ● {stats.occupied} occupied
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-red-500 to-red-600" 
+                      style={{ width: `${stats.total > 0 ? (stats.occupied / stats.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Dogwood Ave */}
+          <div className="bg-amber-100 dark:bg-amber-900/50 text-center py-1 rounded border border-amber-300 dark:border-amber-700 mb-2">
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">DOGWOOD AVE</span>
+          </div>
+
+          {/* Row 3: Sections E & F */}
+          <div className="grid grid-cols-2 gap-4 mb-2">
+            {['E', 'F'].map(section => {
+              const stats = getSectionStats(section);
+              const isHovered = hoveredSection === section;
+              return (
+                <button
+                  key={section}
+                  onClick={() => onPlotSelect && onPlotSelect({ section } as any)}
+                  onMouseEnter={() => setHoveredSection(section)}
+                  onMouseLeave={() => setHoveredSection(null)}
+                  className={`
+                    relative p-4 rounded-lg transition-all duration-200 border-2
+                    ${isHovered 
+                      ? 'bg-blue-100 dark:bg-blue-900 border-blue-500 scale-105 shadow-lg' 
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                    }
+                  `}
+                >
+                  <div className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+                    Section {section}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    {stats.total} plots
+                  </div>
+                  <div className="flex justify-center gap-3 mt-2 text-xs">
+                    <span className="text-green-600 dark:text-green-400">
+                      ● {stats.available} available
+                    </span>
+                    <span className="text-red-600 dark:text-red-400">
+                      ● {stats.occupied} occupied
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-red-500 to-red-600" 
+                      style={{ width: `${stats.total > 0 ? (stats.occupied / stats.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Camellia Ave */}
+          <div className="bg-amber-100 dark:bg-amber-900/50 text-center py-1 rounded border border-amber-300 dark:border-amber-700 mb-2">
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">CAMELLIA AVE</span>
+          </div>
+
+          {/* Row 4: Section G (spans full width) */}
+          {(() => {
+            const stats = getSectionStats('G');
+            const isHovered = hoveredSection === 'G';
             return (
-              <div
-                key={section}
-                className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-md border border-gray-200 dark:border-gray-700"
+              <button
+                onClick={() => onPlotSelect && onPlotSelect({ section: 'G' } as any)}
+                onMouseEnter={() => setHoveredSection('G')}
+                onMouseLeave={() => setHoveredSection(null)}
+                className={`
+                  w-full relative p-4 rounded-lg transition-all duration-200 border-2 mb-2
+                  ${isHovered 
+                    ? 'bg-blue-100 dark:bg-blue-900 border-blue-500 scale-[1.02] shadow-lg' 
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                  }
+                `}
               >
-                <h4 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-                  Section {section}
-                </h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Total:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{sectionPlots.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-green-600">Available:</span>
-                    <span className="font-medium text-green-600">{available}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-red-600">Occupied:</span>
-                    <span className="font-medium text-red-600">{occupied}</span>
-                  </div>
+                <div className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+                  Section G
                 </div>
-                <div className="mt-3 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {stats.total} plots (Large Section)
+                </div>
+                <div className="flex justify-center gap-4 mt-2 text-xs">
+                  <span className="text-green-600 dark:text-green-400">
+                    ● {stats.available} available
+                  </span>
+                  <span className="text-red-600 dark:text-red-400">
+                    ● {stats.occupied} occupied
+                  </span>
+                </div>
+                <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-red-500" 
-                    style={{ width: `${(occupied / sectionPlots.length) * 100}%` }}
+                    className="h-full bg-gradient-to-r from-red-500 to-red-600" 
+                    style={{ width: `${stats.total > 0 ? (stats.occupied / stats.total) * 100 : 0}%` }}
                   />
                 </div>
-              </div>
+              </button>
             );
-          })}
+          })()}
+
+          {/* Azalea Ave */}
+          <div className="bg-amber-100 dark:bg-amber-900/50 text-center py-1 rounded border border-amber-300 dark:border-amber-700 mb-2">
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">AZALEA AVE</span>
+          </div>
+
+          {/* Row 5: Section H (spans full width) */}
+          {(() => {
+            const stats = getSectionStats('H');
+            const isHovered = hoveredSection === 'H';
+            return (
+              <button
+                onClick={() => onPlotSelect && onPlotSelect({ section: 'H' } as any)}
+                onMouseEnter={() => setHoveredSection('H')}
+                onMouseLeave={() => setHoveredSection(null)}
+                className={`
+                  w-full relative p-4 rounded-lg transition-all duration-200 border-2
+                  ${isHovered 
+                    ? 'bg-blue-100 dark:bg-blue-900 border-blue-500 scale-[1.02] shadow-lg' 
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                  }
+                `}
+              >
+                <div className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+                  Section H
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {stats.total} plots (Largest Section)
+                </div>
+                <div className="flex justify-center gap-4 mt-2 text-xs">
+                  <span className="text-green-600 dark:text-green-400">
+                    ● {stats.available} available
+                  </span>
+                  <span className="text-red-600 dark:text-red-400">
+                    ● {stats.occupied} occupied
+                  </span>
+                </div>
+                <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-red-500 to-red-600" 
+                    style={{ width: `${stats.total > 0 ? (stats.occupied / stats.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </button>
+            );
+          })()}
+        </div>
+
+        {/* Total Stats */}
+        <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+          Total: {plots.length.toLocaleString()} plots across 8 sections
         </div>
       </div>
     );
   }
 
+  // Section detail view with plot grid
   return (
     <div className="relative w-full h-full bg-gray-100 dark:bg-gray-900 rounded-lg overflow-auto">
       {/* Section header */}
