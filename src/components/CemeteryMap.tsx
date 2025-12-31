@@ -254,7 +254,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
 
               {/* Road labels between sections */}
               <div className="grid grid-cols-9 gap-0 text-center mb-4">
-                {['Azalea', 'Beech', 'Chinquapin', 'Dogwood', 'Elm', 'Fig', 'Gardenia', 'Heather', 'Hibiscus'].map((road, idx) => (
+                {['Azalea', 'Beech', 'Chinquapin', 'Dogwood', 'Elm', 'Fig', 'Gardenia', 'Heather', 'Hibiscus'].map((road) => (
                   <div key={road} className="text-[8px] text-amber-700 font-medium px-0.5">
                     {road}
                   </div>
@@ -277,97 +277,130 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             </span>
           </div>
 
-          {/* Block/Row Structure Diagram */}
+          {/* Block/Row Structure Diagram - 2x4 Matrix */}
           <div className="bg-white/90 rounded-xl p-5 border border-gray-200">
-            <h4 className="font-bold text-gray-800 mb-4 text-center">📐 Section Layout (Bird&apos;s Eye View)</h4>
+            <h4 className="font-bold text-gray-800 mb-4 text-center">📐 Gravesite Layout (2x4 Matrix per Row)</h4>
             
-            {/* Diagram showing one section */}
-            <div className="max-w-md mx-auto">
+            {/* Diagram showing one section with 2x4 matrix */}
+            <div className="max-w-lg mx-auto">
               <div className="text-center text-xs text-gray-500 mb-2">↑ FODALE (North)</div>
               
               <div className="flex border-2 border-amber-400 rounded-lg overflow-hidden">
                 {/* West Road */}
-                <div className="w-12 bg-amber-200 flex items-center justify-center">
-                  <span className="transform -rotate-90 text-[10px] font-bold text-amber-800 whitespace-nowrap">
+                <div className="w-16 bg-amber-200 flex items-center justify-center border-r-2 border-amber-400">
+                  <span className="transform -rotate-90 text-xs font-bold text-amber-800 whitespace-nowrap">
                     WEST ROAD
                   </span>
                 </div>
                 
-                {/* West Strip - Rows 1-37 */}
-                <div className="flex-1 bg-emerald-50 p-2 border-r border-dashed border-gray-300">
+                {/* West Strip - Rows 1-37 (facing west road) */}
+                <div className="flex-1 bg-emerald-50 p-3">
                   <div className="text-center text-[10px] font-bold text-emerald-700 mb-2">
-                    Rows 1-37
+                    Rows 1-37 (Face West Road)
                   </div>
-                  <div className="text-center text-[9px] text-gray-500 mb-2">
-                    (Sweet Bay → Fodale)
+                  <div className="text-center text-[9px] text-gray-500 mb-3">
+                    Sweet Bay → Fodale
                   </div>
                   
-                  {/* Sample rows */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-center gap-0.5">
-                      <span className="text-[8px] text-gray-400 w-6">37</span>
-                      <div className="flex gap-px">
-                        {[1,2,3,4,5,6,7,8].map(p => (
-                          <div key={p} className="w-4 h-4 bg-emerald-400 rounded-sm text-[7px] text-white flex items-center justify-center">{p}</div>
-                        ))}
+                  {/* Sample rows showing 2x4 matrix */}
+                  <div className="space-y-3">
+                    {/* Row 37 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-emerald-700 w-6">37</span>
+                      <div className="flex-1 bg-white rounded border border-emerald-200 p-1">
+                        <div className="grid grid-cols-4 gap-0.5 mb-0.5">
+                          {[1,2,3,4].map(p => (
+                            <div key={p} className="h-5 bg-emerald-400 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-4 gap-0.5">
+                          {[5,6,7,8].map(p => (
+                            <div key={p} className="h-5 bg-emerald-500 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-[8px] text-gray-400">→</span>
+                      <span className="text-[8px] text-emerald-600">← Road</span>
                     </div>
+                    
                     <div className="text-center text-[8px] text-gray-400">...</div>
-                    <div className="flex items-center justify-center gap-0.5">
-                      <span className="text-[8px] text-gray-400 w-6">1</span>
-                      <div className="flex gap-px">
-                        {[1,2,3,4,5,6,7,8].map(p => (
-                          <div key={p} className="w-4 h-4 bg-emerald-400 rounded-sm text-[7px] text-white flex items-center justify-center">{p}</div>
-                        ))}
+                    
+                    {/* Row 1 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-emerald-700 w-6">1</span>
+                      <div className="flex-1 bg-white rounded border border-emerald-200 p-1">
+                        <div className="grid grid-cols-4 gap-0.5 mb-0.5">
+                          {[1,2,3,4].map(p => (
+                            <div key={p} className="h-5 bg-emerald-400 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-4 gap-0.5">
+                          {[5,6,7,8].map(p => (
+                            <div key={p} className="h-5 bg-emerald-500 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-[8px] text-gray-400">→</span>
+                      <span className="text-[8px] text-emerald-600">← Road</span>
                     </div>
-                  </div>
-                  <div className="text-center text-[8px] text-emerald-600 mt-2">
-                    Plots face West Road
                   </div>
                 </div>
                 
-                {/* East Strip - Rows 38+ */}
-                <div className="flex-1 bg-blue-50 p-2">
+                {/* Center divider */}
+                <div className="w-1 bg-gray-300"></div>
+                
+                {/* East Strip - Rows 38+ (facing east road) */}
+                <div className="flex-1 bg-blue-50 p-3">
                   <div className="text-center text-[10px] font-bold text-blue-700 mb-2">
-                    Rows 38-74
+                    Rows 38-74 (Face East Road)
                   </div>
-                  <div className="text-center text-[9px] text-gray-500 mb-2">
-                    (Fodale → Sweet Bay)
+                  <div className="text-center text-[9px] text-gray-500 mb-3">
+                    Fodale → Sweet Bay
                   </div>
                   
-                  {/* Sample rows */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-center gap-0.5">
-                      <span className="text-[8px] text-gray-400">←</span>
-                      <div className="flex gap-px">
-                        {[8,7,6,5,4,3,2,1].map(p => (
-                          <div key={p} className="w-4 h-4 bg-blue-400 rounded-sm text-[7px] text-white flex items-center justify-center">{p}</div>
-                        ))}
+                  {/* Sample rows showing 2x4 matrix */}
+                  <div className="space-y-3">
+                    {/* Row 38 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-blue-600">Road →</span>
+                      <div className="flex-1 bg-white rounded border border-blue-200 p-1">
+                        <div className="grid grid-cols-4 gap-0.5 mb-0.5">
+                          {[1,2,3,4].map(p => (
+                            <div key={p} className="h-5 bg-blue-400 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-4 gap-0.5">
+                          {[5,6,7,8].map(p => (
+                            <div key={p} className="h-5 bg-blue-500 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-[8px] text-gray-400 w-6">38</span>
+                      <span className="text-[10px] font-bold text-blue-700 w-6">38</span>
                     </div>
+                    
                     <div className="text-center text-[8px] text-gray-400">...</div>
-                    <div className="flex items-center justify-center gap-0.5">
-                      <span className="text-[8px] text-gray-400">←</span>
-                      <div className="flex gap-px">
-                        {[8,7,6,5,4,3,2,1].map(p => (
-                          <div key={p} className="w-4 h-4 bg-blue-400 rounded-sm text-[7px] text-white flex items-center justify-center">{p}</div>
-                        ))}
+                    
+                    {/* Row 74 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-blue-600">Road →</span>
+                      <div className="flex-1 bg-white rounded border border-blue-200 p-1">
+                        <div className="grid grid-cols-4 gap-0.5 mb-0.5">
+                          {[1,2,3,4].map(p => (
+                            <div key={p} className="h-5 bg-blue-400 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-4 gap-0.5">
+                          {[5,6,7,8].map(p => (
+                            <div key={p} className="h-5 bg-blue-500 rounded-sm text-[8px] text-white flex items-center justify-center font-bold">{p}</div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-[8px] text-gray-400 w-6">74</span>
+                      <span className="text-[10px] font-bold text-blue-700 w-6">74</span>
                     </div>
-                  </div>
-                  <div className="text-center text-[8px] text-blue-600 mt-2">
-                    Plots face East Road
                   </div>
                 </div>
                 
                 {/* East Road */}
-                <div className="w-12 bg-amber-200 flex items-center justify-center">
-                  <span className="transform rotate-90 text-[10px] font-bold text-amber-800 whitespace-nowrap">
+                <div className="w-16 bg-amber-200 flex items-center justify-center border-l-2 border-amber-400">
+                  <span className="transform rotate-90 text-xs font-bold text-amber-800 whitespace-nowrap">
                     EAST ROAD
                   </span>
                 </div>
@@ -377,24 +410,29 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             </div>
 
             {/* Position Legend */}
-            <div className="mt-4 text-center">
-              <div className="inline-block bg-gray-100 rounded-lg p-3">
-                <div className="text-[10px] font-bold text-gray-700 mb-2">Position Layout (facing road)</div>
-                <div className="flex justify-center gap-1">
+            <div className="mt-6 flex justify-center">
+              <div className="bg-gray-100 rounded-lg p-4">
+                <div className="text-[11px] font-bold text-gray-700 mb-3 text-center">2x4 Matrix (Perpendicular to Road)</div>
+                <div className="flex items-center gap-4">
                   <div className="text-center">
-                    <div className="text-[8px] text-gray-500 mb-1">Front</div>
-                    <div className="flex gap-0.5">
-                      {[1,2,3,4].map(p => (
-                        <div key={p} className="w-5 h-5 bg-gray-400 rounded text-[9px] text-white flex items-center justify-center font-bold">{p}</div>
-                      ))}
-                    </div>
+                    <div className="text-[9px] text-gray-500 mb-1">ROAD</div>
+                    <div className="w-2 h-16 bg-amber-300 rounded"></div>
                   </div>
-                  <div className="text-center ml-2">
-                    <div className="text-[8px] text-gray-500 mb-1">Back</div>
-                    <div className="flex gap-0.5">
-                      {[5,6,7,8].map(p => (
-                        <div key={p} className="w-5 h-5 bg-gray-500 rounded text-[9px] text-white flex items-center justify-center font-bold">{p}</div>
-                      ))}
+                  <div className="text-center">
+                    <div className="text-[9px] text-gray-500 mb-1">← Facing Road</div>
+                    <div className="bg-white border border-gray-300 rounded p-2">
+                      <div className="text-[8px] text-gray-400 mb-1">Front (closest)</div>
+                      <div className="grid grid-cols-4 gap-1 mb-1">
+                        {[1,2,3,4].map(p => (
+                          <div key={p} className="w-6 h-6 bg-gray-400 rounded text-[10px] text-white flex items-center justify-center font-bold">{p}</div>
+                        ))}
+                      </div>
+                      <div className="text-[8px] text-gray-400 mb-1">Back</div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[5,6,7,8].map(p => (
+                          <div key={p} className="w-6 h-6 bg-gray-500 rounded text-[10px] text-white flex items-center justify-center font-bold">{p}</div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -472,6 +510,92 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
   const westStripRows = allRows.filter(r => r <= 37);
   const eastStripRows = allRows.filter(r => r > 37);
 
+  // Render a single row as 2x4 matrix
+  const renderRowMatrix = (row: number, facingDirection: 'west' | 'east') => {
+    const rowPlots = plotsByRow[row] || [];
+    const frontPositions = [1, 2, 3, 4];
+    const backPositions = [5, 6, 7, 8];
+    
+    return (
+      <div className="flex items-center gap-2 mb-2">
+        {facingDirection === 'west' && (
+          <span className="text-[10px] font-bold text-emerald-700 w-8 text-right">{row}</span>
+        )}
+        {facingDirection === 'east' && (
+          <span className="text-[8px] text-blue-600 w-12">Road →</span>
+        )}
+        
+        <div className={`bg-white rounded border ${facingDirection === 'west' ? 'border-emerald-200' : 'border-blue-200'} p-1`}>
+          {/* Front row (1-4) - closest to road */}
+          <div className="grid grid-cols-4 gap-0.5 mb-0.5">
+            {frontPositions.map(pos => {
+              const plot = rowPlots.find(p => p.plot_position === pos);
+              if (!plot) {
+                return (
+                  <div key={pos} className="w-7 h-7 rounded-sm bg-gray-200 text-[9px] text-gray-400 flex items-center justify-center">
+                    {pos}
+                  </div>
+                );
+              }
+              const deceasedName = getDeceasedName(plot);
+              return (
+                <Link
+                  key={plot.id}
+                  href={`/plot/${plot.id}`}
+                  className={`
+                    w-7 h-7 rounded-sm flex items-center justify-center 
+                    text-[9px] font-bold text-white shadow-sm border
+                    transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10
+                    ${getStatusColor(plot.status)}
+                  `}
+                  title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+                >
+                  {pos}
+                </Link>
+              );
+            })}
+          </div>
+          {/* Back row (5-8) */}
+          <div className="grid grid-cols-4 gap-0.5">
+            {backPositions.map(pos => {
+              const plot = rowPlots.find(p => p.plot_position === pos);
+              if (!plot) {
+                return (
+                  <div key={pos} className="w-7 h-7 rounded-sm bg-gray-200 text-[9px] text-gray-400 flex items-center justify-center">
+                    {pos}
+                  </div>
+                );
+              }
+              const deceasedName = getDeceasedName(plot);
+              return (
+                <Link
+                  key={plot.id}
+                  href={`/plot/${plot.id}`}
+                  className={`
+                    w-7 h-7 rounded-sm flex items-center justify-center 
+                    text-[9px] font-bold text-white shadow-sm border
+                    transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10
+                    ${getStatusColor(plot.status)}
+                  `}
+                  title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+                >
+                  {pos}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+        
+        {facingDirection === 'west' && (
+          <span className="text-[8px] text-emerald-600 w-12">← Road</span>
+        )}
+        {facingDirection === 'east' && (
+          <span className="text-[10px] font-bold text-blue-700 w-8">{row}</span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Section Header */}
@@ -515,12 +639,12 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             </div>
           </div>
           <div className="text-sm text-gray-500">
-            Click any plot for details
+            2x4 Matrix: Front (1-4) closest to road, Back (5-8) behind
           </div>
         </div>
       </div>
 
-      {/* Plot Grid - Two Strips Side by Side */}
+      {/* Plot Grid - Two Strips Side by Side with 2x4 Matrix */}
       {loading ? (
         <div className="flex items-center justify-center h-64 bg-white rounded-xl shadow-lg">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div>
@@ -536,14 +660,14 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
 
           <div className="flex gap-2">
             {/* West Road Label */}
-            <div className="w-16 flex-shrink-0 bg-amber-100 rounded-lg flex items-center justify-center">
+            <div className="w-16 flex-shrink-0 bg-amber-100 rounded-lg flex items-center justify-center border-2 border-amber-300">
               <span className="transform -rotate-90 whitespace-nowrap text-sm font-bold text-amber-800">
-                {currentSection?.westRoad} Rd
+                {currentSection?.westRoad}
               </span>
             </div>
 
             {/* West Strip - Rows 1-37 (facing west road) */}
-            <div className="flex-1 bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+            <div className="flex-1 bg-emerald-50 rounded-lg p-3 border border-emerald-200 overflow-x-auto">
               <div className="text-center mb-3">
                 <span className="text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
                   Rows 1-37 • Facing {currentSection?.westRoad}
@@ -551,45 +675,17 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                 <div className="text-xs text-gray-500 mt-1">Sweet Bay → Fodale</div>
               </div>
               
-              <div className="overflow-x-auto">
-                <div className="min-w-max space-y-1">
-                  {/* Show rows from 37 down to 1 (north to south visually) */}
-                  {[...westStripRows].reverse().map((row) => (
-                    <div key={row} className="flex items-center gap-2">
-                      <div className="w-8 text-right">
-                        <span className="text-xs font-bold text-emerald-700">{row}</span>
-                      </div>
-                      <div className="flex gap-0.5">
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map(pos => {
-                          const plot = plotsByRow[row]?.find(p => p.plot_position === pos);
-                          if (!plot) return <div key={pos} className="w-7 h-7 rounded bg-gray-200 text-[9px] text-gray-400 flex items-center justify-center">{pos}</div>;
-                          const deceasedName = getDeceasedName(plot);
-                          return (
-                            <Link
-                              key={plot.id}
-                              href={`/plot/${plot.id}`}
-                              className={`
-                                w-7 h-7 rounded flex items-center justify-center 
-                                text-[9px] font-bold text-white shadow-sm border
-                                transition-all duration-150 hover:scale-125 hover:shadow-lg hover:z-10
-                                ${getStatusColor(plot.status)}
-                              `}
-                              title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                            >
-                              {pos}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                      <span className="text-[10px] text-emerald-600">→</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="min-w-max">
+                {/* Show rows from 37 down to 1 (north to south visually) */}
+                {[...westStripRows].reverse().map((row) => renderRowMatrix(row, 'west'))}
+                {westStripRows.length === 0 && (
+                  <div className="text-center text-gray-400 py-8">No plots in rows 1-37</div>
+                )}
               </div>
             </div>
 
             {/* East Strip - Rows 38+ (facing east road) */}
-            <div className="flex-1 bg-blue-50 rounded-lg p-3 border border-blue-200">
+            <div className="flex-1 bg-blue-50 rounded-lg p-3 border border-blue-200 overflow-x-auto">
               <div className="text-center mb-3">
                 <span className="text-sm font-bold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
                   Rows 38+ • Facing {currentSection?.eastRoad}
@@ -597,48 +693,19 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                 <div className="text-xs text-gray-500 mt-1">Fodale → Sweet Bay</div>
               </div>
               
-              <div className="overflow-x-auto">
-                <div className="min-w-max space-y-1">
-                  {/* Show rows from 38 down (north to south visually) */}
-                  {eastStripRows.map((row) => (
-                    <div key={row} className="flex items-center gap-2">
-                      <span className="text-[10px] text-blue-600">←</span>
-                      <div className="flex gap-0.5">
-                        {/* Positions reversed to show facing east road */}
-                        {[8, 7, 6, 5, 4, 3, 2, 1].map(pos => {
-                          const plot = plotsByRow[row]?.find(p => p.plot_position === pos);
-                          if (!plot) return <div key={pos} className="w-7 h-7 rounded bg-gray-200 text-[9px] text-gray-400 flex items-center justify-center">{pos}</div>;
-                          const deceasedName = getDeceasedName(plot);
-                          return (
-                            <Link
-                              key={plot.id}
-                              href={`/plot/${plot.id}`}
-                              className={`
-                                w-7 h-7 rounded flex items-center justify-center 
-                                text-[9px] font-bold text-white shadow-sm border
-                                transition-all duration-150 hover:scale-125 hover:shadow-lg hover:z-10
-                                ${getStatusColor(plot.status)}
-                              `}
-                              title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                            >
-                              {pos}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                      <div className="w-8">
-                        <span className="text-xs font-bold text-blue-700">{row}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="min-w-max">
+                {/* Show rows from 38 down (north to south visually) */}
+                {eastStripRows.map((row) => renderRowMatrix(row, 'east'))}
+                {eastStripRows.length === 0 && (
+                  <div className="text-center text-gray-400 py-8">No plots in rows 38+</div>
+                )}
               </div>
             </div>
 
             {/* East Road Label */}
-            <div className="w-16 flex-shrink-0 bg-amber-100 rounded-lg flex items-center justify-center">
+            <div className="w-16 flex-shrink-0 bg-amber-100 rounded-lg flex items-center justify-center border-2 border-amber-300">
               <span className="transform rotate-90 whitespace-nowrap text-sm font-bold text-amber-800">
-                {currentSection?.eastRoad} Rd
+                {currentSection?.eastRoad}
               </span>
             </div>
           </div>
