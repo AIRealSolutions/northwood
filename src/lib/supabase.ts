@@ -281,24 +281,35 @@ export const deceasedAPI = {
     return data as DeceasedWithPlot[];
   },
 
-  // Get total counts
+  // Get total counts - using RPC or multiple queries to handle large datasets
   async getTotalCounts(): Promise<{ total: number; bySection: Record<string, number> }> {
-    const { data, error, count } = await getSupabase()
+    // Get total count
+    const { count: totalCount, error: countError } = await getSupabase()
       .from('deceased_records')
-      .select(`
-        id,
-        plots(section)
-      `, { count: 'exact' });
+      .select('id', { count: 'exact', head: true });
     
-    if (error) throw error;
+    if (countError) throw countError;
     
+    // Get counts by section using a more efficient approach
+    // Query each section separately to avoid the 1000 row limit
+    const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
     const bySection: Record<string, number> = {};
-    data?.forEach((record: any) => {
-      const section = record.plots?.section || 'Unknown';
-      bySection[section] = (bySection[section] || 0) + 1;
-    });
     
-    return { total: count || 0, bySection };
+    for (const section of sections) {
+      const { count, error } = await getSupabase()
+        .from('deceased_records')
+        .select('id, plots!inner(section)', { count: 'exact', head: true })
+        .eq('plots.section', section);
+      
+      if (error) {
+        console.error(`Error counting section ${section}:`, error);
+        bySection[section] = 0;
+      } else {
+        bySection[section] = count || 0;
+      }
+    }
+    
+    return { total: totalCount || 0, bySection };
   }
 };
 
