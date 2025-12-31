@@ -111,6 +111,9 @@ export default function RecordsPage() {
             <Link href="/fundraising" className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white">
               Fundraising
             </Link>
+            <Link href="/gallery" className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white">
+              Gallery
+            </Link>
           </nav>
         </div>
       </header>
