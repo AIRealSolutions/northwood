@@ -92,16 +92,17 @@ export default function RecordsPage() {
   };
 
   // Map section letters to road names (sections are BETWEEN roads)
+  // Orientation: Mitchell (N), Sweet Bay (S), Azalea (W), Fodale (E)
   const getSectionRoads = (section: string): string => {
     const roadMap: Record<string, string> = {
-      'A': 'Azalea-Beech',
-      'B': 'Beech-Chinquapin',
-      'C': 'Chinquapin-Dogwood',
-      'D': 'Dogwood-Elm',
-      'E': 'Elm-Fig',
-      'F': 'Fig-Gardenia',
-      'G': 'Gardenia-Heather',
-      'H': 'Heather-Hibiscus',
+      'A': 'Azalea (W) - Beech',
+      'B': 'Beech - Chinquapin',
+      'C': 'Chinquapin - Dogwood',
+      'D': 'Dogwood - Elm',
+      'E': 'Elm - Fig',
+      'F': 'Fig - Gardenia',
+      'G': 'Gardenia - Heather',
+      'H': 'Heather - Hibiscus (E)',
     };
     return roadMap[section?.toUpperCase()] || section || 'Unknown';
   };

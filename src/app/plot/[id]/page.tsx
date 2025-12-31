@@ -62,18 +62,30 @@ export default function PlotDetailsPage() {
   };
 
   // Map section letters to road names (sections are BETWEEN roads)
+  // Orientation: Mitchell (N), Sweet Bay (S), Azalea (W), Fodale (E)
+  // Rows 1-36 start at Sweet Bay (S), ascending north
+  // Rows 37+ continue from north, descending back south
   const getSectionRoads = (section: string): { west: string; east: string } => {
     const roadMap: Record<string, { west: string; east: string }> = {
-      'A': { west: 'Azalea', east: 'Beech' },
+      'A': { west: 'Azalea (W Border)', east: 'Beech' },
       'B': { west: 'Beech', east: 'Chinquapin' },
       'C': { west: 'Chinquapin', east: 'Dogwood' },
       'D': { west: 'Dogwood', east: 'Elm' },
       'E': { west: 'Elm', east: 'Fig' },
       'F': { west: 'Fig', east: 'Gardenia' },
       'G': { west: 'Gardenia', east: 'Heather' },
-      'H': { west: 'Heather', east: 'Hibiscus' },
+      'H': { west: 'Heather', east: 'Hibiscus (E Border)' },
     };
     return roadMap[section.toUpperCase()] || { west: section, east: section };
+  };
+
+  // Get block info based on row number
+  const getBlockInfo = (rowNumber: number): string => {
+    if (rowNumber <= 36) {
+      return 'Block 1 (South section, rows ascending from Sweet Bay)';
+    } else {
+      return 'Block 2 (North section, rows descending from Mitchell St)';
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -175,6 +187,9 @@ export default function PlotDetailsPage() {
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
                 Section {plot.section} (Between {getSectionRoads(plot.section).west} & {getSectionRoads(plot.section).east}) • Row {plot.row_number} • Position {plot.plot_position}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                {getBlockInfo(plot.row_number || 1)}
               </p>
             </div>
             <div className="flex items-center gap-4">
