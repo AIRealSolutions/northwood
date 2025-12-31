@@ -159,6 +159,50 @@ export const plotsAPI = {
     }));
   },
 
+  // Search plots by name, plot number, or row
+  async searchPlots(searchQuery: string): Promise<PlotWithDetails[]> {
+    // Search by plot number first
+    const { data: plotData, error: plotError } = await getSupabase()
+      .from('plots')
+      .select(`
+        *,
+        deceased_records(*)
+      `)
+      .ilike('plot_number', `%${searchQuery}%`)
+      .limit(50);
+    
+    if (plotError) throw plotError;
+    
+    // Also search by deceased name
+    const { data: deceasedData, error: deceasedError } = await getSupabase()
+      .from('deceased_records')
+      .select(`
+        *,
+        plots(*)
+      `)
+      .or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,maiden_name.ilike.%${searchQuery}%`)
+      .limit(50);
+    
+    if (deceasedError) throw deceasedError;
+    
+    // Combine results - convert deceased results to plot format
+    const plotResults = plotData as PlotWithDetails[];
+    const deceasedPlots = (deceasedData || []).map((d: any) => ({
+      ...d.plots,
+      deceased_records: [d]
+    })).filter((p: any) => p.id) as PlotWithDetails[];
+    
+    // Merge and deduplicate by plot ID
+    const allPlots = [...plotResults];
+    deceasedPlots.forEach(dp => {
+      if (!allPlots.find(p => p.id === dp.id)) {
+        allPlots.push(dp);
+      }
+    });
+    
+    return allPlots;
+  },
+
   // Get plots with pagination
   async getPlotsWithPagination(
     section: string | null, 
