@@ -1,138 +1,98 @@
 'use client';
 
-import React, { Suspense } from 'react';
-import Link from 'next/link';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import CemeteryMap from '@/components/CemeteryMap';
 
-// Component that uses useSearchParams - must be wrapped in Suspense
+export const dynamic = 'force-dynamic';
+
 function CemeteryMapContent() {
   const searchParams = useSearchParams();
-  const selectedSection = searchParams.get('section') || '';
+  const section = searchParams.get('section');
 
   return (
-    <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-black dark:text-white mb-2">Cemetery Map</h1>
-        <p className="text-gray-600 dark:text-gray-300">
-          Interactive map of Northwood Cemetery in Southport, NC. 
-          {selectedSection ? ` Viewing Section ${selectedSection.toUpperCase()}.` : ' Click any section to view individual plots.'}
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Roads run North-South from Fodale Ave to Sweet Bay. Sections are arranged West (Azalea) to East (Hibiscus).
-        </p>
-      </div>
-
-      {/* Cemetery Map Component */}
-      <CemeteryMap selectedSection={selectedSection} />
-
-      {/* Additional Info */}
-      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Cemetery Information</h2>
-        
-        <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Section Layout</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              The cemetery is divided into 8 sections (A through H), arranged from west to east. 
-              Each section is bounded by two flower/tree-named roads.
-            </p>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b dark:border-gray-700">
-                  <th className="text-left py-1">Section</th>
-                  <th className="text-left py-1">West Road</th>
-                  <th className="text-left py-1">East Road</th>
-                </tr>
-              </thead>
-              <tbody className="text-gray-600 dark:text-gray-400">
-                <tr><td className="py-1 font-medium">A</td><td>Azalea</td><td>Beech</td></tr>
-                <tr><td className="py-1 font-medium">B</td><td>Beech</td><td>Chinquapin</td></tr>
-                <tr><td className="py-1 font-medium">C</td><td>Chinquapin</td><td>Dogwood</td></tr>
-                <tr><td className="py-1 font-medium">D</td><td>Dogwood</td><td>Elm</td></tr>
-                <tr><td className="py-1 font-medium">E</td><td>Elm</td><td>Fig</td></tr>
-                <tr><td className="py-1 font-medium">F</td><td>Fig</td><td>Gardenia</td></tr>
-                <tr><td className="py-1 font-medium">G</td><td>Gardenia</td><td>Heather</td></tr>
-                <tr><td className="py-1 font-medium">H</td><td>Heather</td><td>Hibiscus</td></tr>
-              </tbody>
-            </table>
-          </div>
-          
-          <div>
-            <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Plot Layout</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              Each section contains plots arranged in rows running north to south (from Fodale Ave toward Sweet Bay).
-            </p>
-            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-              <li>• <strong>Rows:</strong> Numbered 1-35+ (North to South)</li>
-              <li>• <strong>Positions:</strong> 4 plots per row (1-4, West to East)</li>
-              <li>• <strong>Plot Number Format:</strong> NW-[Section]-[Row]-[Position]</li>
-              <li>• <strong>Example:</strong> NW-D-015-3 = Section D, Row 15, Position 3</li>
-            </ul>
-            
-            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Boundaries</h4>
-              <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <li>North: N Fodale Ave</li>
-                <li>South: Sweet Bay / Leaf Dr area</li>
-                <li>West: Mitchell St / Azalea</li>
-                <li>East: Hibiscus</li>
-              </ul>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                </div>
+                <span className="font-bold text-gray-800">Northwood Cemetery</span>
+              </Link>
+            </div>
+            <div className="flex items-center gap-6">
+              <Link href="/cemetery-map" className="text-emerald-600 font-medium">Map</Link>
+              <Link href="/records" className="text-gray-600 hover:text-emerald-600 transition-colors">Records</Link>
+              <Link href="/gallery" className="text-gray-600 hover:text-emerald-600 transition-colors">Gallery</Link>
             </div>
           </div>
         </div>
-      </div>
-    </>
-  );
-}
+      </nav>
 
-// Loading fallback
-function LoadingFallback() {
-  return (
-    <div className="flex items-center justify-center p-12">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <CemeteryMap selectedSection={section || undefined} />
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t mt-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-bold text-gray-800 mb-3">Northwood Cemetery</h3>
+              <p className="text-gray-600 text-sm">
+                City of Southport<br />
+                Smithville Township<br />
+                Brunswick County, NC
+              </p>
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-800 mb-3">Quick Links</h3>
+              <div className="space-y-2">
+                <Link href="/cemetery-map" className="block text-gray-600 hover:text-emerald-600 text-sm">Cemetery Map</Link>
+                <Link href="/records" className="block text-gray-600 hover:text-emerald-600 text-sm">Search Records</Link>
+                <Link href="/gallery" className="block text-gray-600 hover:text-emerald-600 text-sm">Photo Gallery</Link>
+              </div>
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-800 mb-3">Sections</h3>
+              <div className="flex flex-wrap gap-2">
+                {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((s) => (
+                  <Link
+                    key={s}
+                    href={`/cemetery-map?section=${s}`}
+                    className="w-8 h-8 bg-emerald-100 hover:bg-emerald-200 rounded flex items-center justify-center text-emerald-700 font-medium text-sm transition-colors"
+                  >
+                    {s}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="border-t mt-8 pt-8 text-center text-gray-500 text-sm">
+            © {new Date().getFullYear()} Northwood Cemetery. Platted by Tide Water Engineering and Surveying P.A.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
 export default function CemeteryMapPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
-      <header className="w-full bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-black dark:text-white">
-            Northwood Cemetery
-          </Link>
-          <nav className="hidden md:flex space-x-6">
-            <Link href="/cemetery-map" className="text-black dark:text-white font-medium border-b-2 border-black dark:border-white">
-              Cemetery Map
-            </Link>
-            <Link href="/records" className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white">
-              Records
-            </Link>
-            <Link href="/gallery" className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white">
-              Gallery
-            </Link>
-            <Link href="/burial-services" className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white">
-              Burial Services
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      <main className="flex-grow container mx-auto px-4 py-8">
-        <Suspense fallback={<LoadingFallback />}>
-          <CemeteryMapContent />
-        </Suspense>
-      </main>
-
-      <footer className="bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800 py-6">
-        <div className="container mx-auto px-4">
-          <p className="text-center text-gray-500 dark:text-gray-400 text-sm">
-            Northwood Cemetery - Southport, NC
-          </p>
-        </div>
-      </footer>
-    </div>
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      </div>
+    }>
+      <CemeteryMapContent />
+    </Suspense>
   );
 }

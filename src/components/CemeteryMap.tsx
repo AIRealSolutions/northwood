@@ -2,46 +2,28 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { plotsAPI, Plot, PlotWithDetails } from '@/lib/supabase';
+import Image from 'next/image';
+import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
 
 interface CemeteryMapProps {
-  onPlotSelect?: (plot: Plot | null) => void;
+  onPlotSelect?: (plot: PlotWithDetails | null) => void;
   selectedSection?: string;
 }
 
-// Road names from West to East
-const ROADS = ['Azalea', 'Beech', 'Chinquapin', 'Dogwood', 'Elm', 'Fig', 'Gardenia', 'Heather', 'Hibiscus'];
-
-// Sections between roads (West to East)
+// Section configuration based on official plat drawings
 const SECTIONS = [
-  { id: 'A', name: 'Section A', westRoad: 'Azalea', eastRoad: 'Beech' },
-  { id: 'B', name: 'Section B', westRoad: 'Beech', eastRoad: 'Chinquapin' },
-  { id: 'C', name: 'Section C', westRoad: 'Chinquapin', eastRoad: 'Dogwood' },
-  { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm' },
-  { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig' },
-  { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia' },
-  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather' },
-  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hibiscus' },
+  { id: 'A', name: 'Section A', road: 'Azalea', color: 'from-emerald-400 to-emerald-600' },
+  { id: 'B', name: 'Section B', road: 'Beech', color: 'from-teal-400 to-teal-600' },
+  { id: 'C', name: 'Section C', road: 'Chinquapin', color: 'from-cyan-400 to-cyan-600' },
+  { id: 'D', name: 'Section D', road: 'Dogwood', color: 'from-sky-400 to-sky-600' },
+  { id: 'E', name: 'Section E', road: 'Elm', color: 'from-blue-400 to-blue-600' },
+  { id: 'F', name: 'Section F', road: 'Fig', color: 'from-indigo-400 to-indigo-600' },
+  { id: 'G', name: 'Section G', road: 'Gardenia', color: 'from-violet-400 to-violet-600' },
+  { id: 'H', name: 'Section H', road: 'Heather', color: 'from-purple-400 to-purple-600' },
 ];
 
-// Map section to road name
-export const getRoadName = (section: string): string => {
-  const sectionData = SECTIONS.find(s => s.id === section.toUpperCase());
-  if (sectionData) {
-    return `${sectionData.westRoad}-${sectionData.eastRoad}`;
-  }
-  return section;
-};
-
-export const getWestRoad = (section: string): string => {
-  const sectionData = SECTIONS.find(s => s.id === section.toUpperCase());
-  return sectionData?.westRoad || '';
-};
-
-export const getEastRoad = (section: string): string => {
-  const sectionData = SECTIONS.find(s => s.id === section.toUpperCase());
-  return sectionData?.eastRoad || '';
-};
+// Internal drives in Sections G & H
+const INTERNAL_DRIVES = ['Hydrangia', 'Heather', 'Gardinia'];
 
 export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryMapProps) {
   const [sectionStats, setSectionStats] = useState<Record<string, { total: number; occupied: number; available: number }>>({});
@@ -50,7 +32,8 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<PlotWithDetails[]>([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [hoveredPlot, setHoveredPlot] = useState<PlotWithDetails | null>(null);
+  const [hoveredSection, setHoveredSection] = useState<string | null>(null);
+  const [showPlatMap, setShowPlatMap] = useState(false);
 
   useEffect(() => {
     loadSectionStats();
@@ -83,8 +66,8 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
   };
 
   const loadSectionPlots = async (section: string) => {
+    setLoading(true);
     try {
-      setLoading(true);
       const sectionPlots = await plotsAPI.getPlotsBySection(section);
       setPlots(sectionPlots);
     } catch (error) {
@@ -94,8 +77,10 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
     }
   };
 
-  const handleSearch = async () => {
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!searchQuery.trim()) {
+      setShowSearch(false);
       setSearchResults([]);
       return;
     }
@@ -108,24 +93,6 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
     }
   };
 
-  // Group plots by row for the selected section
-  const plotsByRow = plots.reduce((acc, plot) => {
-    const row = plot.row_number;
-    if (!acc[row]) acc[row] = [];
-    acc[row].push(plot);
-    return acc;
-  }, {} as Record<number, Plot[]>);
-
-  const sortedRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
-
-  const getPlotColor = (plot: Plot) => {
-    switch (plot.status) {
-      case 'occupied': return 'bg-rose-500 hover:bg-rose-600';
-      case 'reserved': return 'bg-amber-400 hover:bg-amber-500';
-      default: return 'bg-emerald-500 hover:bg-emerald-600';
-    }
-  };
-
   const getDeceasedName = (plot: PlotWithDetails) => {
     const deceased = plot.deceased_records?.[0];
     if (deceased) {
@@ -134,329 +101,344 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
     return null;
   };
 
-  if (loading && !selectedSection) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-      </div>
-    );
-  }
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'occupied': return 'bg-rose-500';
+      case 'reserved': return 'bg-amber-500';
+      default: return 'bg-emerald-500';
+    }
+  };
 
-  // Overview Map View
+  // Render the overview map
   if (!selectedSection) {
     return (
       <div className="space-y-6">
-        {/* Search Bar */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Search by name, plot number, or row..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-black dark:text-white"
-            />
-            <button
-              onClick={handleSearch}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-md"
-            >
-              Search
-            </button>
-          </div>
-          
-          {/* Search Results */}
-          {showSearch && searchResults.length > 0 && (
-            <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-              <h3 className="font-semibold mb-2">Search Results ({searchResults.length})</h3>
-              <div className="max-h-60 overflow-y-auto space-y-2">
-                {searchResults.map(plot => (
-                  <Link
-                    key={plot.id}
-                    href={`/plot/${plot.id}`}
-                    className="block p-3 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="font-medium">{plot.plot_number}</span>
-                        <span className="text-gray-500 ml-2">
-                          Section {plot.section} • Row {plot.row_number}
-                        </span>
-                      </div>
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        plot.status === 'occupied' ? 'bg-rose-100 text-rose-800' :
-                        plot.status === 'reserved' ? 'bg-amber-100 text-amber-800' :
-                        'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {plot.status}
-                      </span>
-                    </div>
-                    {getDeceasedName(plot) && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {getDeceasedName(plot)}
-                      </p>
-                    )}
-                  </Link>
-                ))}
-              </div>
+        {/* Header with Search */}
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Northwood Cemetery</h2>
+              <p className="text-gray-500">Southport, NC • Est. 1989</p>
             </div>
-          )}
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name or plot..."
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-64"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                Search
+              </button>
+            </form>
+          </div>
         </div>
 
-        {/* Aerial Map Image */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-          <h3 className="font-semibold mb-3 text-center">Northwood Cemetery Aerial View</h3>
-          <div className="relative">
-            <img 
-              src="/cemetery-photos/cemetery-map-aerial.png" 
-              alt="Northwood Cemetery Aerial Map"
-              className="w-full rounded-lg"
-            />
+        {/* Search Results */}
+        {showSearch && searchResults.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Search Results ({searchResults.length})</h3>
+            <div className="grid gap-3 max-h-64 overflow-y-auto">
+              {searchResults.map((plot) => (
+                <Link
+                  key={plot.id}
+                  href={`/plot/${plot.id}`}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-emerald-50 transition-colors"
+                >
+                  <div>
+                    <span className="font-medium text-gray-800">{plot.plot_number}</span>
+                    {getDeceasedName(plot) && (
+                      <span className="ml-2 text-gray-600">• {getDeceasedName(plot)}</span>
+                    )}
+                  </div>
+                  <span className={`px-2 py-1 rounded text-xs text-white ${getStatusColor(plot.status)}`}>
+                    {plot.status}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Interactive Map */}
-        <div className="bg-gradient-to-b from-emerald-50 to-emerald-100 dark:from-gray-900 dark:to-gray-800 rounded-lg shadow-md p-6">
-          <h3 className="font-semibold mb-4 text-center text-lg">Interactive Cemetery Map</h3>
-          
-          {/* Compass and Labels */}
-          <div className="text-center mb-2 text-sm text-gray-600 dark:text-gray-400">
-            <span className="font-semibold">↑ NORTH (N Fodale Ave)</span>
+        <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl shadow-lg p-6 overflow-hidden">
+          {/* Map Legend */}
+          <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-emerald-500"></div>
+                <span className="text-sm text-gray-600">Available</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-rose-500"></div>
+                <span className="text-sm text-gray-600">Occupied</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-amber-500"></div>
+                <span className="text-sm text-gray-600">Reserved</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowPlatMap(!showPlatMap)}
+              className="text-sm text-emerald-600 hover:text-emerald-700 underline"
+            >
+              {showPlatMap ? 'Hide Plat Map' : 'View Official Plat Map'}
+            </button>
           </div>
 
-          {/* Main Map Grid */}
+          {/* Plat Map Image */}
+          {showPlatMap && (
+            <div className="mb-6 bg-white rounded-xl p-4 shadow-inner">
+              <Image
+                src="/cemetery-photos/plat-sections-af.jpeg"
+                alt="Official Plat Map - Sections A-F"
+                width={800}
+                height={600}
+                className="w-full h-auto rounded-lg"
+              />
+              <p className="text-center text-sm text-gray-500 mt-2">Official Survey Drawing - Tide Water Engineering, June 1989</p>
+            </div>
+          )}
+
+          {/* Cemetery Layout */}
           <div className="relative">
-            {/* West/East Labels */}
-            <div className="flex justify-between text-xs text-gray-500 mb-1 px-2">
-              <span>← WEST (Mitchell St)</span>
-              <span>EAST (Leaf Dr) →</span>
+            {/* North Label */}
+            <div className="text-center mb-4">
+              <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur px-4 py-2 rounded-full shadow">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                <span className="font-semibold text-gray-700">N • Fodale Avenue</span>
+              </div>
             </div>
 
-            {/* Road and Section Grid */}
-            <div className="flex">
-              {/* Roads and Sections */}
-              {SECTIONS.map((section, index) => (
-                <React.Fragment key={section.id}>
-                  {/* West Road (only for first section) */}
-                  {index === 0 && (
-                    <div className="w-6 bg-amber-200 dark:bg-amber-900 flex items-center justify-center">
-                      <span className="text-xs font-medium text-amber-800 dark:text-amber-200 transform -rotate-90 whitespace-nowrap">
-                        {section.westRoad}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* Section */}
+            {/* Sections Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+              {SECTIONS.map((section) => {
+                const stats = sectionStats[section.id] || { total: 0, occupied: 0, available: 0 };
+                const occupancyPercent = stats.total > 0 ? (stats.occupied / stats.total) * 100 : 0;
+                
+                return (
                   <Link
-                    href={`/cemetery-map?section=${section.id.toLowerCase()}`}
-                    className="flex-1 min-w-0"
+                    key={section.id}
+                    href={`/cemetery-map?section=${section.id}`}
+                    className="group relative"
+                    onMouseEnter={() => setHoveredSection(section.id)}
+                    onMouseLeave={() => setHoveredSection(null)}
                   >
-                    <div className="bg-emerald-200 dark:bg-emerald-900 hover:bg-emerald-300 dark:hover:bg-emerald-800 transition-colors p-3 border-x border-emerald-300 dark:border-emerald-700 cursor-pointer h-48 flex flex-col justify-between">
-                      <div className="text-center">
-                        <div className="font-bold text-lg text-emerald-800 dark:text-emerald-200">
-                          {section.id}
+                    <div className={`
+                      relative overflow-hidden rounded-xl shadow-lg transition-all duration-300
+                      ${hoveredSection === section.id ? 'scale-105 shadow-2xl z-10' : ''}
+                      bg-gradient-to-br ${section.color}
+                    `}>
+                      {/* Section Content */}
+                      <div className="p-4 text-white">
+                        <div className="text-3xl font-bold mb-1">{section.id}</div>
+                        <div className="text-xs opacity-90 mb-3">{section.road}</div>
+                        
+                        {/* Stats */}
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span>Total</span>
+                            <span className="font-semibold">{stats.total}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Available</span>
+                            <span className="font-semibold text-emerald-200">{stats.available}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Occupied</span>
+                            <span className="font-semibold text-rose-200">{stats.occupied}</span>
+                          </div>
                         </div>
-                        <div className="text-xs text-emerald-600 dark:text-emerald-400">
-                          {section.name}
-                        </div>
-                      </div>
-                      
-                      {/* Stats */}
-                      <div className="text-center text-xs">
-                        <div className="text-emerald-700 dark:text-emerald-300">
-                          {sectionStats[section.id]?.total || 0} plots
-                        </div>
-                        <div className="flex justify-center gap-2 mt-1">
-                          <span className="text-rose-600">
-                            {sectionStats[section.id]?.occupied || 0} used
-                          </span>
-                          <span className="text-emerald-600">
-                            {sectionStats[section.id]?.available || 0} avail
-                          </span>
-                        </div>
-                        {/* Progress bar */}
-                        <div className="mt-2 h-2 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden">
+
+                        {/* Occupancy Bar */}
+                        <div className="mt-3 h-2 bg-white/30 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-rose-500"
-                            style={{ 
-                              width: `${sectionStats[section.id]?.total ? 
-                                (sectionStats[section.id].occupied / sectionStats[section.id].total) * 100 : 0}%` 
-                            }}
+                            className="h-full bg-white/80 rounded-full transition-all duration-500"
+                            style={{ width: `${occupancyPercent}%` }}
                           />
                         </div>
+                        <div className="text-xs mt-1 text-center opacity-80">
+                          {occupancyPercent.toFixed(0)}% occupied
+                        </div>
                       </div>
 
-                      {/* Row indicator */}
-                      <div className="text-center text-xs text-emerald-600 dark:text-emerald-400">
-                        Rows 1-{Math.ceil((sectionStats[section.id]?.total || 140) / 4)}
-                      </div>
+                      {/* Hover Effect */}
+                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                  </Link>
 
-                  {/* East Road */}
-                  <div className="w-6 bg-amber-200 dark:bg-amber-900 flex items-center justify-center">
-                    <span className="text-xs font-medium text-amber-800 dark:text-amber-200 transform -rotate-90 whitespace-nowrap">
-                      {section.eastRoad}
-                    </span>
-                  </div>
-                </React.Fragment>
-              ))}
+                    {/* Tooltip on Hover */}
+                    {hoveredSection === section.id && (
+                      <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-nowrap z-20">
+                        Click to view {section.name}
+                        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900" />
+                      </div>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
 
             {/* South Label */}
-            <div className="text-center mt-2 text-sm text-gray-600 dark:text-gray-400">
-              <span className="font-semibold">↓ SOUTH</span>
+            <div className="text-center mt-4">
+              <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur px-4 py-2 rounded-full shadow">
+                <span className="font-semibold text-gray-700">S • Sweet Bay</span>
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Road Labels */}
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              {['Azalea', 'Beech', 'Chinquapin', 'Dogwood', 'Elm', 'Fig', 'Gardenia', 'Heather', 'Hibiscus'].map((road, i) => (
+                <span key={road} className="text-xs bg-white/80 px-2 py-1 rounded-full text-gray-600 shadow-sm">
+                  {road} {i < 8 ? `(${String.fromCharCode(65 + i)})` : ''}
+                </span>
+              ))}
             </div>
           </div>
+        </div>
 
-          {/* Legend */}
-          <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-emerald-500 rounded"></div>
-              <span>Available</span>
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <div className="text-3xl font-bold text-emerald-600">
+              {Object.values(sectionStats).reduce((sum, s) => sum + s.total, 0).toLocaleString()}
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-rose-500 rounded"></div>
-              <span>Occupied</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-amber-400 rounded"></div>
-              <span>Reserved</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-4 bg-amber-200 dark:bg-amber-900 rounded"></div>
-              <span>Roads</span>
-            </div>
+            <div className="text-gray-500 text-sm">Total Plots</div>
           </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <div className="text-3xl font-bold text-rose-600">
+              {Object.values(sectionStats).reduce((sum, s) => sum + s.occupied, 0).toLocaleString()}
+            </div>
+            <div className="text-gray-500 text-sm">Occupied</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <div className="text-3xl font-bold text-emerald-600">
+              {Object.values(sectionStats).reduce((sum, s) => sum + s.available, 0).toLocaleString()}
+            </div>
+            <div className="text-gray-500 text-sm">Available</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <div className="text-3xl font-bold text-gray-600">8</div>
+            <div className="text-gray-500 text-sm">Sections</div>
+          </div>
+        </div>
 
-          {/* Instructions */}
-          <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-            Click on any section to view individual plots
+        {/* Internal Drives Info for G & H */}
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Internal Drives (Sections G & H)</h3>
+          <div className="flex flex-wrap gap-3">
+            {INTERNAL_DRIVES.map((drive) => (
+              <div key={drive} className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-lg">
+                <div className="w-8 h-1 bg-amber-400 rounded"></div>
+                <span className="text-gray-700">{drive} Drive</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-gray-500 mt-3">
+            12&apos; wide drives running east-west through the newer sections
           </p>
         </div>
       </div>
     );
   }
 
-  // Section Detail View
-  const sectionData = SECTIONS.find(s => s.id === selectedSection.toUpperCase());
+  // Render section detail view
+  const currentSection = SECTIONS.find(s => s.id === selectedSection);
   
+  // Group plots by row
+  const plotsByRow: Record<number, PlotWithDetails[]> = {};
+  plots.forEach(plot => {
+    const row = plot.row_number || 1;
+    if (!plotsByRow[row]) plotsByRow[row] = [];
+    plotsByRow[row].push(plot);
+  });
+  
+  const rows = Object.keys(plotsByRow).map(Number).sort((a, b) => b - a);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Section Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-        <div className="flex justify-between items-center">
+      <div className={`bg-gradient-to-r ${currentSection?.color || 'from-gray-400 to-gray-600'} rounded-2xl shadow-lg p-6 text-white`}>
+        <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold">Section {selectedSection.toUpperCase()}</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Between {sectionData?.westRoad} and {sectionData?.eastRoad} Roads
-            </p>
+            <Link href="/cemetery-map" className="text-white/80 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Map
+            </Link>
+            <h2 className="text-3xl font-bold">{currentSection?.name}</h2>
+            <p className="text-white/80">{currentSection?.road} Road • Rows 1-{rows[0] || 74}</p>
           </div>
-          <Link
-            href="/cemetery-map"
-            className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg text-sm"
-          >
-            ← Back to Overview
-          </Link>
+          <div className="text-right">
+            <div className="text-4xl font-bold">{plots.length}</div>
+            <div className="text-white/80">Total Plots</div>
+          </div>
         </div>
-        
-        {/* Section Stats */}
-        <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-            <div className="text-2xl font-bold">{plots.length}</div>
-            <div className="text-sm text-gray-500">Total Plots</div>
-          </div>
-          <div className="bg-rose-50 dark:bg-rose-900/30 rounded-lg p-3">
-            <div className="text-2xl font-bold text-rose-600">{plots.filter(p => p.status === 'occupied').length}</div>
-            <div className="text-sm text-gray-500">Occupied</div>
-          </div>
-          <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-lg p-3">
-            <div className="text-2xl font-bold text-emerald-600">{plots.filter(p => p.status === 'available').length}</div>
-            <div className="text-sm text-gray-500">Available</div>
-          </div>
+      </div>
+
+      {/* Legend */}
+      <div className="bg-white rounded-xl shadow p-4 flex flex-wrap items-center gap-4">
+        <span className="text-gray-600 font-medium">Legend:</span>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-emerald-500"></div>
+          <span className="text-sm">Available</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-rose-500"></div>
+          <span className="text-sm">Occupied</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-amber-500"></div>
+          <span className="text-sm">Reserved</span>
         </div>
       </div>
 
       {/* Plot Grid */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 overflow-x-auto">
-        {loading ? (
-          <div className="flex items-center justify-center p-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-          </div>
-        ) : (
-          <div className="min-w-fit">
-            {/* Column Headers - Plot Positions */}
-            <div className="flex items-center mb-2">
-              <div className="w-16 text-center text-xs font-semibold text-gray-500">Row</div>
-              <div className="flex-1 grid grid-cols-4 gap-1 text-center text-xs text-gray-500">
-                <span>{sectionData?.westRoad} Side</span>
-                <span>Position 2</span>
-                <span>Position 3</span>
-                <span>{sectionData?.eastRoad} Side</span>
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
+          <div className="min-w-max">
+            {rows.map((row) => (
+              <div key={row} className="flex items-center gap-2 mb-2">
+                <div className="w-12 text-right text-sm text-gray-500 font-medium">
+                  Row {row}
+                </div>
+                <div className="flex gap-1">
+                  {plotsByRow[row]
+                    .sort((a, b) => (a.plot_position || 0) - (b.plot_position || 0))
+                    .map((plot) => {
+                      const deceasedName = getDeceasedName(plot);
+                      return (
+                        <Link
+                          key={plot.id}
+                          href={`/plot/${plot.id}`}
+                          className={`
+                            w-10 h-10 rounded-lg flex items-center justify-center text-xs font-medium text-white
+                            transition-all duration-200 hover:scale-110 hover:shadow-lg
+                            ${getStatusColor(plot.status)}
+                          `}
+                          title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+                        >
+                          {plot.plot_position || ''}
+                        </Link>
+                      );
+                    })}
+                </div>
               </div>
-            </div>
-
-            {/* Rows */}
-            <div className="space-y-1">
-              {sortedRows.map(rowNum => {
-                const rowPlots = plotsByRow[rowNum].sort((a, b) => a.plot_position - b.plot_position);
-                
-                return (
-                  <div key={rowNum} className="flex items-center">
-                    {/* Row Number */}
-                    <div className="w-16 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {rowNum}
-                    </div>
-                    
-                    {/* Plots in Row (4 positions) */}
-                    <div className="flex-1 grid grid-cols-4 gap-1">
-                      {[1, 2, 3, 4].map(pos => {
-                        const plot = rowPlots.find(p => p.plot_position === pos);
-                        if (!plot) {
-                          return <div key={pos} className="h-10 bg-gray-100 dark:bg-gray-900 rounded"></div>;
-                        }
-                        
-                        const deceasedName = getDeceasedName(plot);
-                        
-                        return (
-                          <Link
-                            key={plot.id}
-                            href={`/plot/${plot.id}`}
-                            className={`h-10 rounded ${getPlotColor(plot)} flex items-center justify-center text-white text-xs font-medium transition-all hover:scale-105 relative group`}
-                            onMouseEnter={() => setHoveredPlot(plot)}
-                            onMouseLeave={() => setHoveredPlot(null)}
-                          >
-                            {pos}
-                            
-                            {/* Tooltip */}
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                              <div className="font-semibold">{plot.plot_number}</div>
-                              {deceasedName && <div>{deceasedName}</div>}
-                              <div className="text-gray-300 capitalize">{plot.status}</div>
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            ))}
           </div>
-        )}
-      </div>
-
-      {/* Hovered Plot Info */}
-      {hoveredPlot && (
-        <div className="fixed bottom-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 max-w-xs z-50">
-          <h4 className="font-semibold">{hoveredPlot.plot_number}</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Row {hoveredPlot.row_number}, Position {hoveredPlot.plot_position}
-          </p>
-          {getDeceasedName(hoveredPlot) && (
-            <p className="text-sm mt-1">{getDeceasedName(hoveredPlot)}</p>
-          )}
-          <p className="text-xs text-gray-500 mt-2">Click to view details</p>
         </div>
       )}
     </div>
