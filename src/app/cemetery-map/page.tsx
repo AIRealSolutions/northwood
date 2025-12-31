@@ -5,13 +5,17 @@ export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import CemeteryMap from '@/components/CemeteryMap';
 import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
 
 export default function CemeteryMapPage() {
+  const searchParams = useSearchParams();
+  const initialSection = searchParams.get('section') || 'all';
+  
   const [plots, setPlots] = useState<PlotWithDetails[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedSection, setSelectedSection] = useState('all');
+  const [selectedSection, setSelectedSection] = useState(initialSection);
   const [viewMode, setViewMode] = useState('standard');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlot, setSelectedPlot] = useState<PlotWithDetails | null>(null);
@@ -127,11 +131,23 @@ export default function CemeteryMapPage() {
           <h1 className="text-3xl font-bold text-black dark:text-white mb-2">Cemetery Map</h1>
           <p className="text-gray-600 dark:text-gray-300">
             Interactive map of Northwood Cemetery with {totalPlots.toLocaleString()} plots across 8 sections.
+            Click any plot to view details.
           </p>
         </div>
 
         {/* Section Summary Cards */}
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mb-6">
+        <div className="grid grid-cols-4 md:grid-cols-9 gap-2 mb-6">
+          <button
+            onClick={() => handleSectionChange('all')}
+            className={`p-3 rounded-lg text-center transition-colors ${
+              selectedSection === 'all'
+                ? 'bg-gray-800 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            <div className="font-bold text-sm">All</div>
+            <div className="text-xs opacity-75">{totalPlots}</div>
+          </button>
           {sectionSummary.map(section => (
             <button
               key={section.section}
@@ -142,8 +158,8 @@ export default function CemeteryMapPage() {
                   : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
-              <div className="font-bold">Section {section.section}</div>
-              <div className="text-xs opacity-75">{section.total} plots</div>
+              <div className="font-bold">{section.section}</div>
+              <div className="text-xs opacity-75">{section.total}</div>
               <div className="text-xs">
                 <span className={selectedSection === section.section.toLowerCase() ? 'text-green-200' : 'text-green-600'}>
                   {section.available}
@@ -265,10 +281,36 @@ export default function CemeteryMapPage() {
           </div>
         </div>
 
+        {/* Plot Information Panel */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-black dark:text-white mb-4">Plot Information</h2>
           {selectedPlot ? (
             <div className="space-y-4">
+              {/* Primary: Deceased Information */}
+              {selectedPlot.deceased_records && selectedPlot.deceased_records.length > 0 ? (
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-4">
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Interred</h3>
+                  {selectedPlot.deceased_records.map((deceased: any) => (
+                    <div key={deceased.id} className="mb-3 last:mb-0">
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {deceased.first_name} {deceased.middle_name ? deceased.middle_name + ' ' : ''}{deceased.last_name}
+                        {deceased.maiden_name && <span className="text-gray-500 font-normal"> (née {deceased.maiden_name})</span>}
+                      </p>
+                      {deceased.birth_date && deceased.death_date && (
+                        <p className="text-gray-600 dark:text-gray-400">
+                          {new Date(deceased.birth_date).toLocaleDateString()} - {new Date(deceased.death_date).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-4 text-center">
+                  <p className="text-gray-500 dark:text-gray-400">No burial records for this plot</p>
+                </div>
+              )}
+
+              {/* Plot Details Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Plot Number</p>
@@ -298,6 +340,7 @@ export default function CemeteryMapPage() {
                     {selectedPlot.plot_type.charAt(0).toUpperCase() + selectedPlot.plot_type.slice(1)}
                   </p>
                 </div>
+                {/* Secondary: Owner Information */}
                 {selectedPlot.owner_name && (
                   <div className="col-span-2">
                     <p className="text-sm text-gray-600 dark:text-gray-400">Owner</p>
@@ -313,29 +356,24 @@ export default function CemeteryMapPage() {
                   </div>
                 )}
               </div>
-              {selectedPlot.deceased_records && selectedPlot.deceased_records.length > 0 && (
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Interred Individuals:</p>
-                  {selectedPlot.deceased_records.map((deceased: any) => (
-                    <div key={deceased.id} className="mb-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                      <p className="font-medium text-black dark:text-white">
-                        {deceased.first_name} {deceased.middle_name ? deceased.middle_name + ' ' : ''}{deceased.last_name}
-                        {deceased.maiden_name && <span className="text-gray-500"> (née {deceased.maiden_name})</span>}
-                      </p>
-                      {deceased.birth_date && deceased.death_date && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {new Date(deceased.birth_date).toLocaleDateString()} - {new Date(deceased.death_date).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+
+              {/* View Full Details Button */}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <Link
+                  href={`/plot/${selectedPlot.id}`}
+                  className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  View Full Details
+                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
             </div>
           ) : (
             <p className="text-gray-600 dark:text-gray-300">
-              Select a section above, then click on any plot to view detailed information including status, 
-              owner information, and any deceased records associated with it.
+              Select a section above, then click on any plot to view information about interred individuals, 
+              owner details, and other plot information.
             </p>
           )}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">

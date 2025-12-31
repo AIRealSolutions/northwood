@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { PlotWithDetails } from '@/lib/supabase';
 
 interface CemeteryMapProps {
@@ -65,6 +66,15 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
       return 'ring-2 ring-gray-600';
     }
     return '';
+  };
+
+  // Get deceased name for a plot
+  const getDeceasedName = (plot: PlotWithDetails) => {
+    if (plot.deceased_records && plot.deceased_records.length > 0) {
+      const deceased = plot.deceased_records[0];
+      return `${deceased.first_name} ${deceased.last_name}`;
+    }
+    return null;
   };
 
   // If no section is selected, show section overview
@@ -229,28 +239,11 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
                 {selectedPlot.plot_type.charAt(0).toUpperCase() + selectedPlot.plot_type.slice(1)}
               </span>
             </div>
-            
-            {selectedPlot.owner_name && (
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Owner:</span>
-                <span className="font-medium text-gray-900 dark:text-white text-right max-w-[180px] truncate">
-                  {selectedPlot.owner_name}
-                </span>
-              </div>
-            )}
 
-            {selectedPlot.purchase_date && (
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Purchased:</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {new Date(selectedPlot.purchase_date).toLocaleDateString()}
-                </span>
-              </div>
-            )}
-
+            {/* Deceased - Primary Info */}
             {selectedPlot.deceased_records && selectedPlot.deceased_records.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-gray-600 dark:text-gray-400 mb-1">Interred:</p>
+                <p className="text-gray-600 dark:text-gray-400 mb-1 font-medium">Interred:</p>
                 {selectedPlot.deceased_records.map((deceased: any) => (
                   <div key={deceased.id} className="mb-1">
                     <p className="font-medium text-gray-900 dark:text-white">
@@ -265,6 +258,24 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
                 ))}
               </div>
             )}
+
+            {/* Owner - Secondary Info */}
+            {selectedPlot.owner_name && (
+              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Owner:</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300">{selectedPlot.owner_name}</p>
+              </div>
+            )}
+          </div>
+
+          {/* View Details Button */}
+          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <Link
+              href={`/plot/${selectedPlot.id}`}
+              className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+            >
+              View Full Details
+            </Link>
           </div>
         </div>
       )}
@@ -275,9 +286,13 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
           {(() => {
             const plot = filteredPlots.find(p => p.id === hoveredPlot);
             if (!plot) return null;
+            const deceasedName = getDeceasedName(plot);
             return (
               <div className="text-sm">
                 <p className="font-bold text-gray-900 dark:text-white">{plot.plot_number}</p>
+                {deceasedName && (
+                  <p className="text-gray-700 dark:text-gray-300">{deceasedName}</p>
+                )}
                 <p className="text-gray-600 dark:text-gray-400">
                   Status: <span className={
                     plot.status === 'available' ? 'text-green-600' :
@@ -286,7 +301,7 @@ export default function CemeteryMap({ plots, onPlotSelect, selectedSection }: Ce
                   }>{plot.status}</span>
                 </p>
                 {plot.owner_name && (
-                  <p className="text-gray-600 dark:text-gray-400">Owner: {plot.owner_name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Owner: {plot.owner_name}</p>
                 )}
               </div>
             );
