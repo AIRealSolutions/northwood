@@ -1,28 +1,53 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { deceasedAPI, DeceasedRecord } from '@/lib/supabase';
+import { deceasedAPI, DeceasedWithPlot } from '@/lib/supabase';
 
 export default function Records() {
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<DeceasedWithPlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchName, setSearchName] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedSection, setSelectedSection] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 10;
+  const [totalCount, setTotalCount] = useState(0);
+  const [sectionCounts, setSectionCounts] = useState<Record<string, number>>({});
+  const recordsPerPage = 25;
 
+  // Load initial data and counts
   useEffect(() => {
     loadRecords();
+    loadCounts();
   }, []);
+
+  // Reload when page or section changes
+  useEffect(() => {
+    loadRecords();
+  }, [currentPage, selectedSection]);
+
+  const loadCounts = async () => {
+    try {
+      const counts = await deceasedAPI.getTotalCounts();
+      setTotalCount(counts.total);
+      setSectionCounts(counts.bySection);
+    } catch (error) {
+      console.error('Error loading counts:', error);
+    }
+  };
 
   const loadRecords = async () => {
     try {
       setLoading(true);
-      const data = await deceasedAPI.getRecordsWithPlots();
+      const { data, count } = await deceasedAPI.getRecordsWithPagination(
+        currentPage,
+        recordsPerPage,
+        searchName || undefined,
+        selectedSection !== 'all' ? selectedSection : undefined
+      );
       setRecords(data);
+      if (count !== null) setTotalCount(count);
     } catch (error) {
       console.error('Error loading records:', error);
     } finally {
@@ -33,24 +58,23 @@ export default function Records() {
   const handleSearch = async () => {
     try {
       setLoading(true);
+      setCurrentPage(1);
       
       if (dateFrom && dateTo) {
         const data = await deceasedAPI.filterByDateRange(dateFrom, dateTo);
-        setRecords(data.map(d => ({ ...d, plots: null })));
+        setRecords(data);
+        setTotalCount(data.length);
       } else if (searchName.trim()) {
         const data = await deceasedAPI.searchByName(searchName);
-        // Reload with plot info
-        const withPlots = await deceasedAPI.getRecordsWithPlots();
-        const filtered = withPlots.filter(r => 
-          r.first_name.toLowerCase().includes(searchName.toLowerCase()) ||
-          r.last_name.toLowerCase().includes(searchName.toLowerCase())
-        );
+        // Filter by section if needed
+        const filtered = selectedSection === 'all' 
+          ? data 
+          : data.filter(r => r.plots?.section?.toLowerCase() === selectedSection.toLowerCase());
         setRecords(filtered);
+        setTotalCount(filtered.length);
       } else {
         loadRecords();
       }
-      
-      setCurrentPage(1);
     } catch (error) {
       console.error('Error searching records:', error);
     } finally {
@@ -58,21 +82,54 @@ export default function Records() {
     }
   };
 
-  const filteredRecords = records.filter(record => {
-    if (selectedSection === 'all') return true;
-    return record.plots?.section?.toLowerCase() === selectedSection.toLowerCase();
-  });
+  const handleClear = () => {
+    setSearchName('');
+    setDateFrom('');
+    setDateTo('');
+    setSelectedSection('all');
+    setCurrentPage(1);
+    loadRecords();
+    loadCounts();
+  };
 
-  // Pagination
-  const indexOfLastRecord = currentPage * recordsPerPage;
-  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
-  const currentRecords = filteredRecords.slice(indexOfFirstRecord, indexOfLastRecord);
-  const totalPages = Math.ceil(filteredRecords.length / recordsPerPage);
+  const handleSectionChange = (section: string) => {
+    setSelectedSection(section);
+    setCurrentPage(1);
+  };
 
-  const formatDate = (dateString: string | null) => {
+  // Calculate pagination
+  const totalPages = Math.ceil(totalCount / recordsPerPage);
+  const indexOfFirstRecord = (currentPage - 1) * recordsPerPage + 1;
+  const indexOfLastRecord = Math.min(currentPage * recordsPerPage, totalCount);
+
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    try {
+      const date = new Date(dateString);
+      // Check for invalid dates like 1933-01-01 which might be year-only
+      if (dateString.endsWith('-01-01') && date.getMonth() === 0 && date.getDate() === 1) {
+        return date.getFullYear().toString();
+      }
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const calculateAge = (birthDate: string | null | undefined, deathDate: string | null | undefined) => {
+    if (!birthDate || !deathDate) return 'N/A';
+    try {
+      const birth = new Date(birthDate);
+      const death = new Date(deathDate);
+      let age = death.getFullYear() - birth.getFullYear();
+      const monthDiff = death.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && death.getDate() < birth.getDate())) {
+        age--;
+      }
+      return age >= 0 ? age : 'N/A';
+    } catch {
+      return 'N/A';
+    }
   };
 
   return (
@@ -103,8 +160,26 @@ export default function Records() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-black dark:text-white mb-2">Cemetery Records</h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Search and browse records of interments at Northwood Cemetery.
+            Search and browse {totalCount.toLocaleString()} records of interments at Northwood Cemetery.
           </p>
+        </div>
+
+        {/* Section Summary Cards */}
+        <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mb-6">
+          {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map(section => (
+            <button
+              key={section}
+              onClick={() => handleSectionChange(section.toLowerCase())}
+              className={`p-3 rounded-lg text-center transition-colors ${
+                selectedSection === section.toLowerCase()
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <div className="font-bold">Section {section}</div>
+              <div className="text-sm opacity-75">{sectionCounts[section] || 0}</div>
+            </button>
+          ))}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
@@ -118,7 +193,7 @@ export default function Records() {
               <input
                 type="text"
                 id="name-search"
-                placeholder="First or Last name"
+                placeholder="First, Last, or Maiden name"
                 value={searchName}
                 onChange={(e) => setSearchName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
@@ -156,31 +231,25 @@ export default function Records() {
               <select
                 id="section-select"
                 value={selectedSection}
-                onChange={(e) => setSelectedSection(e.target.value)}
+                onChange={(e) => handleSectionChange(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
               >
-                <option value="all">All Sections</option>
-                <option value="a">Section A</option>
-                <option value="b">Section B</option>
-                <option value="c">Section C</option>
-                <option value="d">Section D</option>
-                <option value="e">Section E</option>
-                <option value="f">Section F</option>
-                <option value="g">Section G</option>
-                <option value="h">Section H</option>
+                <option value="all">All Sections ({totalCount.toLocaleString()})</option>
+                <option value="a">Section A ({sectionCounts['A'] || 0})</option>
+                <option value="b">Section B ({sectionCounts['B'] || 0})</option>
+                <option value="c">Section C ({sectionCounts['C'] || 0})</option>
+                <option value="d">Section D ({sectionCounts['D'] || 0})</option>
+                <option value="e">Section E ({sectionCounts['E'] || 0})</option>
+                <option value="f">Section F ({sectionCounts['F'] || 0})</option>
+                <option value="g">Section G ({sectionCounts['G'] || 0})</option>
+                <option value="h">Section H ({sectionCounts['H'] || 0})</option>
               </select>
             </div>
           </div>
           
           <div className="flex justify-end gap-2">
             <button 
-              onClick={() => {
-                setSearchName('');
-                setDateFrom('');
-                setDateTo('');
-                setSelectedSection('all');
-                loadRecords();
-              }}
+              onClick={handleClear}
               className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium py-2 px-4 rounded-md transition-colors"
             >
               Clear
@@ -211,6 +280,9 @@ export default function Records() {
                         Name
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Maiden Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Birth Date
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -225,11 +297,14 @@ export default function Records() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {currentRecords.length > 0 ? (
-                      currentRecords.map((record) => (
+                    {records.length > 0 ? (
+                      records.map((record) => (
                         <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
-                            {record.last_name}, {record.first_name} {record.middle_name || ''}
+                            <span className="font-medium">{record.last_name}</span>, {record.first_name} {record.middle_name || ''}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {record.maiden_name || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                             {formatDate(record.birth_date)}
@@ -238,16 +313,24 @@ export default function Records() {
                             {formatDate(record.death_date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {record.plots ? `Section ${record.plots.section}, ${record.plots.plot_number}` : 'N/A'}
+                            {record.plots ? (
+                              <span>
+                                <span className="font-medium text-blue-600 dark:text-blue-400">
+                                  Section {record.plots.section}
+                                </span>
+                                <span className="text-gray-400 mx-1">|</span>
+                                {record.plots.plot_number}
+                              </span>
+                            ) : 'N/A'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {record.age_at_death || 'N/A'}
+                            {calculateAge(record.birth_date, record.death_date)}
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                           No records found. Try adjusting your search criteria.
                         </td>
                       </tr>
@@ -256,14 +339,21 @@ export default function Records() {
                 </table>
               </div>
               
-              {filteredRecords.length > 0 && (
+              {records.length > 0 && (
                 <div className="mt-4 flex items-center justify-between">
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    Showing <span className="font-medium">{indexOfFirstRecord + 1}</span> to{' '}
-                    <span className="font-medium">{Math.min(indexOfLastRecord, filteredRecords.length)}</span> of{' '}
-                    <span className="font-medium">{filteredRecords.length}</span> results
+                    Showing <span className="font-medium">{indexOfFirstRecord.toLocaleString()}</span> to{' '}
+                    <span className="font-medium">{indexOfLastRecord.toLocaleString()}</span> of{' '}
+                    <span className="font-medium">{totalCount.toLocaleString()}</span> results
                   </div>
                   <div className="flex space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600"
+                    >
+                      First
+                    </button>
                     <button
                       onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                       disabled={currentPage === 1}
@@ -280,6 +370,13 @@ export default function Records() {
                       className="bg-blue-600 text-white border border-blue-600 rounded-md px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
                     >
                       Next
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600"
+                    >
+                      Last
                     </button>
                   </div>
                 </div>

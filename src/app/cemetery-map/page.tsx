@@ -7,20 +7,40 @@ import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
 
 export default function CemeteryMapPage() {
   const [plots, setPlots] = useState<PlotWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedSection, setSelectedSection] = useState('all');
   const [viewMode, setViewMode] = useState('standard');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlot, setSelectedPlot] = useState<PlotWithDetails | null>(null);
+  const [sectionSummary, setSectionSummary] = useState<any[]>([]);
 
+  // Load section summary on mount
   useEffect(() => {
-    loadPlots();
+    loadSectionSummary();
   }, []);
 
-  const loadPlots = async () => {
+  // Load plots when section changes
+  useEffect(() => {
+    if (selectedSection !== 'all') {
+      loadPlotsBySection(selectedSection);
+    } else {
+      setPlots([]);
+    }
+  }, [selectedSection]);
+
+  const loadSectionSummary = async () => {
+    try {
+      const summary = await plotsAPI.getSectionSummary();
+      setSectionSummary(summary);
+    } catch (error) {
+      console.error('Error loading section summary:', error);
+    }
+  };
+
+  const loadPlotsBySection = async (section: string) => {
     try {
       setLoading(true);
-      const data = await plotsAPI.getAllPlots();
+      const data = await plotsAPI.getPlotsBySection(section.toUpperCase());
       setPlots(data);
     } catch (error) {
       console.error('Error loading plots:', error);
@@ -29,26 +49,17 @@ export default function CemeteryMapPage() {
     }
   };
 
-  const handleSectionChange = async (section: string) => {
+  const handleSectionChange = (section: string) => {
     setSelectedSection(section);
-    if (section === 'all') {
-      loadPlots();
-    } else {
-      try {
-        setLoading(true);
-        const data = await plotsAPI.getPlotsBySection(section.toUpperCase());
-        setPlots(data);
-      } catch (error) {
-        console.error('Error loading plots by section:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
+    setSelectedPlot(null);
+    setSearchTerm('');
   };
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
-      loadPlots();
+      if (selectedSection !== 'all') {
+        loadPlotsBySection(selectedSection);
+      }
       return;
     }
 
@@ -56,6 +67,13 @@ export default function CemeteryMapPage() {
       setLoading(true);
       const data = await plotsAPI.searchByPlotNumber(searchTerm);
       setPlots(data);
+      // If search returns results from a single section, auto-select it
+      if (data.length > 0) {
+        const sections = [...new Set(data.map(p => p.section))];
+        if (sections.length === 1) {
+          setSelectedSection(sections[0].toLowerCase());
+        }
+      }
     } catch (error) {
       console.error('Error searching plots:', error);
     } finally {
@@ -69,8 +87,13 @@ export default function CemeteryMapPage() {
     } else if (viewMode === 'hybrid') {
       return plot.plot_type === 'hybrid';
     }
-    return true; // standard view shows all
+    return true;
   });
+
+  // Calculate totals from section summary
+  const totalPlots = sectionSummary.reduce((sum, s) => sum + s.total, 0);
+  const totalAvailable = sectionSummary.reduce((sum, s) => sum + s.available, 0);
+  const totalOccupied = sectionSummary.reduce((sum, s) => sum + s.occupied, 0);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
@@ -100,8 +123,35 @@ export default function CemeteryMapPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-black dark:text-white mb-2">Cemetery Map</h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Interactive map of Northwood Cemetery plots and sections.
+            Interactive map of Northwood Cemetery with {totalPlots.toLocaleString()} plots across 8 sections.
           </p>
+        </div>
+
+        {/* Section Summary Cards */}
+        <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mb-6">
+          {sectionSummary.map(section => (
+            <button
+              key={section.section}
+              onClick={() => handleSectionChange(section.section.toLowerCase())}
+              className={`p-3 rounded-lg text-center transition-colors ${
+                selectedSection === section.section.toLowerCase()
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <div className="font-bold">Section {section.section}</div>
+              <div className="text-xs opacity-75">{section.total} plots</div>
+              <div className="text-xs">
+                <span className={selectedSection === section.section.toLowerCase() ? 'text-green-200' : 'text-green-600'}>
+                  {section.available}
+                </span>
+                {' / '}
+                <span className={selectedSection === section.section.toLowerCase() ? 'text-red-200' : 'text-red-600'}>
+                  {section.occupied}
+                </span>
+              </div>
+            </button>
+          ))}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
@@ -116,15 +166,15 @@ export default function CemeteryMapPage() {
                 onChange={(e) => handleSectionChange(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
               >
-                <option value="all">All Sections</option>
-                <option value="a">Section A</option>
-                <option value="b">Section B</option>
-                <option value="c">Section C</option>
-                <option value="d">Section D</option>
-                <option value="e">Section E</option>
-                <option value="f">Section F</option>
-                <option value="g">Section G</option>
-                <option value="h">Section H</option>
+                <option value="all">Overview - All Sections</option>
+                <option value="a">Section A ({sectionSummary.find(s => s.section === 'A')?.total || 0} plots)</option>
+                <option value="b">Section B ({sectionSummary.find(s => s.section === 'B')?.total || 0} plots)</option>
+                <option value="c">Section C ({sectionSummary.find(s => s.section === 'C')?.total || 0} plots)</option>
+                <option value="d">Section D ({sectionSummary.find(s => s.section === 'D')?.total || 0} plots)</option>
+                <option value="e">Section E ({sectionSummary.find(s => s.section === 'E')?.total || 0} plots)</option>
+                <option value="f">Section F ({sectionSummary.find(s => s.section === 'F')?.total || 0} plots)</option>
+                <option value="g">Section G ({sectionSummary.find(s => s.section === 'G')?.total || 0} plots)</option>
+                <option value="h">Section H ({sectionSummary.find(s => s.section === 'H')?.total || 0} plots)</option>
               </select>
             </div>
             <div className="flex-1">
@@ -137,30 +187,30 @@ export default function CemeteryMapPage() {
                 onChange={(e) => setViewMode(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
               >
-                <option value="standard">Standard View</option>
-                <option value="cremation">Cremation View</option>
-                <option value="hybrid">Hybrid View</option>
+                <option value="standard">All Plots</option>
+                <option value="cremation">Cremation Only</option>
+                <option value="hybrid">Hybrid Only</option>
               </select>
             </div>
             <div className="flex-1">
               <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Search
+                Search Plot Number
               </label>
-              <div className="relative">
+              <div className="flex gap-2">
                 <input
                   type="text"
                   id="search"
-                  placeholder="Search by plot number"
+                  placeholder="e.g., NW-A-001"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
+                  className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-black dark:text-white"
                 />
                 <button 
                   onClick={handleSearch}
-                  className="absolute right-2 top-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
                 >
-                  🔍
+                  Search
                 </button>
               </div>
             </div>
@@ -183,25 +233,29 @@ export default function CemeteryMapPage() {
             </div>
           )}
 
-          <div className="mt-4 flex justify-between items-center">
+          <div className="mt-4 flex flex-wrap justify-between items-center gap-4">
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              Showing {filteredPlots.length} plot{filteredPlots.length !== 1 ? 's' : ''}
+              {selectedSection !== 'all' ? (
+                <>Showing {filteredPlots.length} plot{filteredPlots.length !== 1 ? 's' : ''} in Section {selectedSection.toUpperCase()}</>
+              ) : (
+                <>Total: {totalPlots.toLocaleString()} plots | {totalAvailable.toLocaleString()} available | {totalOccupied.toLocaleString()} occupied</>
+              )}
             </div>
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 inline-flex">
-              <div className="flex items-center mr-4">
-                <span className="inline-block w-4 h-4 bg-green-500 rounded-full mr-2"></span>
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 inline-flex flex-wrap gap-4">
+              <div className="flex items-center">
+                <span className="inline-block w-4 h-4 bg-green-500 rounded mr-2"></span>
                 <span className="text-sm text-gray-700 dark:text-gray-300">Available</span>
               </div>
-              <div className="flex items-center mr-4">
-                <span className="inline-block w-4 h-4 bg-yellow-500 rounded-full mr-2"></span>
+              <div className="flex items-center">
+                <span className="inline-block w-4 h-4 bg-yellow-500 rounded mr-2"></span>
                 <span className="text-sm text-gray-700 dark:text-gray-300">Reserved</span>
               </div>
-              <div className="flex items-center mr-4">
-                <span className="inline-block w-4 h-4 bg-red-500 rounded-full mr-2"></span>
+              <div className="flex items-center">
+                <span className="inline-block w-4 h-4 bg-red-500 rounded mr-2"></span>
                 <span className="text-sm text-gray-700 dark:text-gray-300">Occupied</span>
               </div>
               <div className="flex items-center">
-                <span className="inline-block w-4 h-4 bg-purple-500 rounded-full mr-2"></span>
+                <span className="inline-block w-4 h-4 bg-purple-500 rounded mr-2"></span>
                 <span className="text-sm text-gray-700 dark:text-gray-300">Cremation</span>
               </div>
             </div>
@@ -212,7 +266,7 @@ export default function CemeteryMapPage() {
           <h2 className="text-xl font-semibold text-black dark:text-white mb-4">Plot Information</h2>
           {selectedPlot ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Plot Number</p>
                   <p className="font-medium text-black dark:text-white">{selectedPlot.plot_number}</p>
@@ -220,6 +274,10 @@ export default function CemeteryMapPage() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Section</p>
                   <p className="font-medium text-black dark:text-white">Section {selectedPlot.section}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Row / Position</p>
+                  <p className="font-medium text-black dark:text-white">{selectedPlot.row_number} / {selectedPlot.plot_position}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
@@ -237,16 +295,18 @@ export default function CemeteryMapPage() {
                     {selectedPlot.plot_type.charAt(0).toUpperCase() + selectedPlot.plot_type.slice(1)}
                   </p>
                 </div>
-                {selectedPlot.price && (
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Price</p>
-                    <p className="font-medium text-black dark:text-white">${selectedPlot.price.toLocaleString()}</p>
-                  </div>
-                )}
                 {selectedPlot.owner_name && (
-                  <div>
+                  <div className="col-span-2">
                     <p className="text-sm text-gray-600 dark:text-gray-400">Owner</p>
                     <p className="font-medium text-black dark:text-white">{selectedPlot.owner_name}</p>
+                  </div>
+                )}
+                {selectedPlot.purchase_date && (
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Purchase Date</p>
+                    <p className="font-medium text-black dark:text-white">
+                      {new Date(selectedPlot.purchase_date).toLocaleDateString()}
+                    </p>
                   </div>
                 )}
               </div>
@@ -254,9 +314,10 @@ export default function CemeteryMapPage() {
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Interred Individuals:</p>
                   {selectedPlot.deceased_records.map((deceased: any) => (
-                    <div key={deceased.id} className="mb-2">
+                    <div key={deceased.id} className="mb-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
                       <p className="font-medium text-black dark:text-white">
                         {deceased.first_name} {deceased.middle_name ? deceased.middle_name + ' ' : ''}{deceased.last_name}
+                        {deceased.maiden_name && <span className="text-gray-500"> (née {deceased.maiden_name})</span>}
                       </p>
                       {deceased.birth_date && deceased.death_date && (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -270,7 +331,7 @@ export default function CemeteryMapPage() {
             </div>
           ) : (
             <p className="text-gray-600 dark:text-gray-300">
-              Select a plot on the map to view detailed information. You can click on any plot to see its status, 
+              Select a section above, then click on any plot to view detailed information including status, 
               owner information, and any deceased records associated with it.
             </p>
           )}
