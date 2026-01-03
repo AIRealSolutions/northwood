@@ -308,13 +308,13 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div className="mb-3">
                         <div className="text-[9px] font-bold text-emerald-700 mb-1">Row 37 (North end)</div>
                         <div className="bg-white rounded border border-emerald-300 p-2">
-                          {/* Vertical layout: 4 rows x 2 columns */}
-                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                          {/* Reversed order: 8,4 at top */}
+                          {[[8,4], [7,3], [6,2], [5,1]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
-                              <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-emerald-500 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                              <div className="w-10 h-8 bg-emerald-500 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
                             </div>
@@ -328,12 +328,12 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div>
                         <div className="text-[9px] font-bold text-emerald-700 mb-1">Row 1 (South end)</div>
                         <div className="bg-white rounded border border-emerald-300 p-2">
-                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                          {[[8,4], [7,3], [6,2], [5,1]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
-                              <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-emerald-500 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                              <div className="w-10 h-8 bg-emerald-500 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
                             </div>
@@ -361,13 +361,13 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div className="mb-3">
                         <div className="text-[9px] font-bold text-blue-700 mb-1">Row 38 (North end)</div>
                         <div className="bg-white rounded border border-blue-300 p-2">
-                          {/* Same as west: 1-4 closest to road */}
-                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                          {/* Reversed order: 8,4 at top */}
+                          {[[8,4], [7,3], [6,2], [5,1]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
-                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
                             </div>
@@ -381,13 +381,13 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div>
                         <div className="text-[9px] font-bold text-blue-700 mb-1">Row 74 (South end)</div>
                         <div className="bg-white rounded border border-blue-300 p-2">
-                          {/* Same as west: 1-4 closest to road */}
-                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                          {/* Reversed order: 8,4 at top */}
+                          {[[8,4], [7,3], [6,2], [5,1]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
-                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
                             </div>
@@ -514,10 +514,10 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
   // Render a single row as VERTICAL 4x2 matrix (positions run north-south)
   const renderRowMatrix = (row: number, facingDirection: 'west' | 'east') => {
     const rowPlots = plotsByRow[row] || [];
-    // Both strips: [1,5], [2,6], [3,7], [4,8]
+    // Reversed order: 8,4 at top (north), 5,1 at bottom (south)
     // Positions 1-4 are always closest to their respective roads
     // Positions 5-8 are always farther from the roads
-    const positionPairs = [[1, 5], [2, 6], [3, 7], [4, 8]];
+    const positionPairs = [[8, 4], [7, 3], [6, 2], [5, 1]];
     
     return (
       <div className="mb-2">
