@@ -277,7 +277,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
 
           {/* Block/Row Structure Diagram - Horizontal 2x4 Matrix */}
           <div className="bg-white/90 rounded-xl p-5 border border-gray-200">
-            <h4 className="font-bold text-gray-800 mb-4 text-center">📐 Gravesite Layout (2x4 Matrix Along Road)</h4>
+            <h4 className="font-bold text-gray-800 mb-4 text-center">📐 Gravesite Layout (4×2 Matrix Running Vertically)</h4>
             
             <div className="max-w-2xl mx-auto">
               <div className="text-center text-xs text-gray-500 mb-2">↑ FODALE (North)</div>
@@ -301,29 +301,24 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                     {/* Plots - horizontal 2x4 matrix */}
                     <div className="flex-1">
                       <div className="text-[10px] text-gray-500 mb-2 text-center">
-                        Each row: 2x4 matrix running along the road
+                        Each row: 4×2 matrix running vertically (N-S)
                       </div>
                       
                       {/* Example row 37 */}
                       <div className="mb-3">
                         <div className="text-[9px] font-bold text-emerald-700 mb-1">Row 37 (North end)</div>
                         <div className="bg-white rounded border border-emerald-300 p-2">
-                          {/* Front row - horizontal */}
-                          <div className="flex gap-1 mb-1">
-                            {[1,2,3,4].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-emerald-400 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                          {/* Vertical layout: 4 rows x 2 columns */}
+                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                            <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
+                              <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                            ))}
-                          </div>
-                          {/* Back row - horizontal */}
-                          <div className="flex gap-1">
-                            {[5,6,7,8].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-emerald-500 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                              <div className="w-10 h-8 bg-emerald-500 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                       
@@ -333,20 +328,16 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div>
                         <div className="text-[9px] font-bold text-emerald-700 mb-1">Row 1 (South end)</div>
                         <div className="bg-white rounded border border-emerald-300 p-2">
-                          <div className="flex gap-1 mb-1">
-                            {[1,2,3,4].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-emerald-400 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                            <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
+                              <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                            ))}
-                          </div>
-                          <div className="flex gap-1">
-                            {[5,6,7,8].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-emerald-500 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                              <div className="w-10 h-8 bg-emerald-500 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -363,27 +354,23 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                     {/* Plots - horizontal 2x4 matrix */}
                     <div className="flex-1">
                       <div className="text-[10px] text-gray-500 mb-2 text-center">
-                        Each row: 2x4 matrix running along the road
+                        Each row: 4×2 matrix running vertically (N-S)
                       </div>
                       
                       {/* Example row 38 */}
                       <div className="mb-3">
                         <div className="text-[9px] font-bold text-blue-700 mb-1">Row 38 (North end)</div>
                         <div className="bg-white rounded border border-blue-300 p-2">
-                          <div className="flex gap-1 mb-1">
-                            {[1,2,3,4].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-blue-400 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                            <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
+                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                            ))}
-                          </div>
-                          <div className="flex gap-1">
-                            {[5,6,7,8].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-blue-500 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                       
@@ -393,20 +380,16 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div>
                         <div className="text-[9px] font-bold text-blue-700 mb-1">Row 74 (South end)</div>
                         <div className="bg-white rounded border border-blue-300 p-2">
-                          <div className="flex gap-1 mb-1">
-                            {[1,2,3,4].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-blue-400 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                            <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
+                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                            ))}
-                          </div>
-                          <div className="flex gap-1">
-                            {[5,6,7,8].map(p => (
-                              <div key={p} className="flex-1 h-10 bg-blue-500 rounded flex items-center justify-center">
-                                <span className="transform -rotate-90 text-white font-bold text-xs">{p}</span>
+                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
+                                <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -428,32 +411,28 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             <div className="mt-6 flex justify-center">
               <div className="bg-gray-100 rounded-lg p-4">
                 <div className="text-[11px] font-bold text-gray-700 mb-3 text-center">
-                  2x4 Matrix (Horizontal Along Road)
+                  4×2 Matrix (Vertical North-South)
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-16 bg-amber-300 rounded flex items-center justify-center">
+                  <div className="w-12 h-20 bg-amber-300 rounded flex items-center justify-center">
                     <span className="text-[8px] text-amber-800 font-bold transform -rotate-90 whitespace-nowrap">ROAD</span>
                   </div>
                   <div className="bg-white border border-gray-300 rounded p-2">
-                    <div className="text-[8px] text-gray-400 mb-1 text-center">Front (closest)</div>
-                    <div className="flex gap-1 mb-1">
-                      {[1,2,3,4].map(p => (
-                        <div key={p} className="w-6 h-8 bg-gray-400 rounded flex items-center justify-center">
-                          <span className="transform -rotate-90 text-[9px] text-white font-bold">{p}</span>
+                    <div className="text-[8px] text-gray-400 mb-1 text-center">West ← → East</div>
+                    {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                      <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
+                        <div className="w-7 h-6 bg-gray-400 rounded flex items-center justify-center">
+                          <span className="text-[9px] text-white font-bold">{p1}</span>
                         </div>
-                      ))}
-                    </div>
-                    <div className="text-[8px] text-gray-400 mb-1 text-center">Back</div>
-                    <div className="flex gap-1">
-                      {[5,6,7,8].map(p => (
-                        <div key={p} className="w-6 h-8 bg-gray-500 rounded flex items-center justify-center">
-                          <span className="transform -rotate-90 text-[9px] text-white font-bold">{p}</span>
+                        <div className="w-7 h-6 bg-gray-500 rounded flex items-center justify-center">
+                          <span className="text-[9px] text-white font-bold">{p2}</span>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
+                    <div className="text-[8px] text-gray-400 mt-1 text-center">↑ North ↓ South</div>
                   </div>
                   <div className="text-[9px] text-gray-600 max-w-[120px]">
-                    Numbers appear sideways, all positions face the road
+                    Positions 1-4 (left), 5-8 (right). Runs vertically along road.
                   </div>
                 </div>
               </div>
@@ -530,74 +509,73 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
   const westStripRows = allRows.filter(r => r <= 37);
   const eastStripRows = allRows.filter(r => r > 37);
 
-  // Render a single row as horizontal 2x4 matrix
+  // Render a single row as VERTICAL 4x2 matrix (positions run north-south)
   const renderRowMatrix = (row: number, facingDirection: 'west' | 'east') => {
     const rowPlots = plotsByRow[row] || [];
-    const frontPositions = [1, 2, 3, 4];
-    const backPositions = [5, 6, 7, 8];
+    // Positions arranged as: [1,5], [2,6], [3,7], [4,8] (4 rows x 2 columns)
+    const positionPairs = [[1, 5], [2, 6], [3, 7], [4, 8]];
     
     return (
       <div className="mb-2">
         <div className="text-[9px] text-gray-500 mb-1">Row {row}</div>
         <div className={`bg-white rounded border ${facingDirection === 'west' ? 'border-emerald-200' : 'border-blue-200'} p-1`}>
-          {/* Front row (1-4) - horizontal */}
-          <div className="flex gap-0.5 mb-0.5">
-            {frontPositions.map(pos => {
-              const plot = rowPlots.find(p => p.plot_position === pos);
-              if (!plot) {
+          {/* 4 rows x 2 columns - vertical layout */}
+          {positionPairs.map(([pos1, pos2]) => (
+            <div key={`${pos1}-${pos2}`} className="flex gap-0.5 mb-0.5 last:mb-0">
+              {/* Position 1-4 (left column) */}
+              {(() => {
+                const plot = rowPlots.find(p => p.plot_position === pos1);
+                if (!plot) {
+                  return (
+                    <div className="w-8 h-6 rounded-sm bg-gray-200 flex items-center justify-center">
+                      <span className="text-[8px] text-gray-400">{pos1}</span>
+                    </div>
+                  );
+                }
+                const deceasedName = getDeceasedName(plot);
                 return (
-                  <div key={pos} className="flex-1 h-8 rounded-sm bg-gray-200 flex items-center justify-center">
-                    <span className="transform -rotate-90 text-[8px] text-gray-400">{pos}</span>
-                  </div>
+                  <Link
+                    href={`/plot/${plot.id}`}
+                    className={`
+                      w-8 h-6 rounded-sm flex items-center justify-center 
+                      text-white shadow-sm border
+                      transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
+                      ${getStatusColor(plot.status)}
+                    `}
+                    title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+                  >
+                    <span className="text-[8px] font-bold">{pos1}</span>
+                  </Link>
                 );
-              }
-              const deceasedName = getDeceasedName(plot);
-              return (
-                <Link
-                  key={plot.id}
-                  href={`/plot/${plot.id}`}
-                  className={`
-                    flex-1 h-8 rounded-sm flex items-center justify-center 
-                    text-white shadow-sm border
-                    transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
-                    ${getStatusColor(plot.status)}
-                  `}
-                  title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                >
-                  <span className="transform -rotate-90 text-[8px] font-bold">{pos}</span>
-                </Link>
-              );
-            })}
-          </div>
-          {/* Back row (5-8) - horizontal */}
-          <div className="flex gap-0.5">
-            {backPositions.map(pos => {
-              const plot = rowPlots.find(p => p.plot_position === pos);
-              if (!plot) {
+              })()}
+              {/* Position 5-8 (right column) */}
+              {(() => {
+                const plot = rowPlots.find(p => p.plot_position === pos2);
+                if (!plot) {
+                  return (
+                    <div className="w-8 h-6 rounded-sm bg-gray-200 flex items-center justify-center">
+                      <span className="text-[8px] text-gray-400">{pos2}</span>
+                    </div>
+                  );
+                }
+                const deceasedName = getDeceasedName(plot);
                 return (
-                  <div key={pos} className="flex-1 h-8 rounded-sm bg-gray-200 flex items-center justify-center">
-                    <span className="transform -rotate-90 text-[8px] text-gray-400">{pos}</span>
-                  </div>
+                  <Link
+                    href={`/plot/${plot.id}`}
+                    className={`
+                      w-8 h-6 rounded-sm flex items-center justify-center 
+                      text-white shadow-sm border
+                      transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
+                      ${getStatusColor(plot.status)}
+                    `}
+                    title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+                  >
+                    <span className="text-[8px] font-bold">{pos2}</span>
+                  </Link>
                 );
-              }
-              const deceasedName = getDeceasedName(plot);
-              return (
-                <Link
-                  key={plot.id}
-                  href={`/plot/${plot.id}`}
-                  className={`
-                    flex-1 h-8 rounded-sm flex items-center justify-center 
-                    text-white shadow-sm border
-                    transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
-                    ${getStatusColor(plot.status)}
-                  `}
-                  title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                >
-                  <span className="transform -rotate-90 text-[8px] font-bold">{pos}</span>
-                </Link>
-              );
-            })}
-          </div>
+              })()}
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -646,7 +624,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             </div>
           </div>
           <div className="text-sm text-gray-500">
-            2x4 Matrix: Front (1-4) closest to road, Back (5-8) behind • Numbers sideways
+            4×2 Matrix: Positions 1-4 (left column), 5-8 (right column) • Runs vertically N-S
           </div>
         </div>
       </div>
