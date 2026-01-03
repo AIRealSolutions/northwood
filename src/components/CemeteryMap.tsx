@@ -361,13 +361,13 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div className="mb-3">
                         <div className="text-[9px] font-bold text-blue-700 mb-1">Row 38 (North end)</div>
                         <div className="bg-white rounded border border-blue-300 p-2">
-                          {/* FLIPPED: 5-8 on left, 1-4 on right */}
-                          {[[5,1], [6,2], [7,3], [8,4]].map(([p1, p2]) => (
+                          {/* Same as west: 1-4 closest to road */}
+                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
-                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
                             </div>
@@ -381,13 +381,13 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div>
                         <div className="text-[9px] font-bold text-blue-700 mb-1">Row 74 (South end)</div>
                         <div className="bg-white rounded border border-blue-300 p-2">
-                          {/* FLIPPED: 5-8 on left, 1-4 on right */}
-                          {[[5,1], [6,2], [7,3], [8,4]].map(([p1, p2]) => (
+                          {/* Same as west: 1-4 closest to road */}
+                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
-                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
                               </div>
-                              <div className="w-10 h-8 bg-blue-400 rounded flex items-center justify-center">
+                              <div className="w-10 h-8 bg-blue-500 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p2}</span>
                               </div>
                             </div>
@@ -514,11 +514,10 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
   // Render a single row as VERTICAL 4x2 matrix (positions run north-south)
   const renderRowMatrix = (row: number, facingDirection: 'west' | 'east') => {
     const rowPlots = plotsByRow[row] || [];
-    // West-facing (ascending): [1,5], [2,6], [3,7], [4,8] - positions 1-4 on left
-    // East-facing (descending): [5,1], [6,2], [7,3], [8,4] - positions 5-8 on left (FLIPPED)
-    const positionPairs = facingDirection === 'west' 
-      ? [[1, 5], [2, 6], [3, 7], [4, 8]]
-      : [[5, 1], [6, 2], [7, 3], [8, 4]];
+    // Both strips: [1,5], [2,6], [3,7], [4,8]
+    // Positions 1-4 are always closest to their respective roads
+    // Positions 5-8 are always farther from the roads
+    const positionPairs = [[1, 5], [2, 6], [3, 7], [4, 8]];
     
     return (
       <div className="mb-2">
@@ -629,7 +628,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             </div>
           </div>
           <div className="text-sm text-gray-500">
-            4×2 Matrix: West strip [1-4 left, 5-8 right] • East strip [5-8 left, 1-4 right] • Runs vertically N-S
+            4×2 Matrix: Positions 1-4 (closest to road), 5-8 (farther from road) • Runs vertically N-S
           </div>
         </div>
       </div>
