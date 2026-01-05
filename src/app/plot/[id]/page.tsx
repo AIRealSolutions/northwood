@@ -192,13 +192,24 @@ export default function PlotDetailsPage() {
                 {getBlockInfo(plot.row_number || 1)}
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(plot.status)}`}>
-                {plot.status.charAt(0).toUpperCase() + plot.status.slice(1)}
-              </span>
-              <span className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300">
-                {plot.plot_type.charAt(0).toUpperCase() + plot.plot_type.slice(1)}
-              </span>
+            <div className="flex flex-col items-end gap-3">
+              <div className="flex items-center gap-4">
+                <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(plot.status)}`}>
+                  {plot.status.charAt(0).toUpperCase() + plot.status.slice(1)}
+                </span>
+                <span className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {plot.plot_type.charAt(0).toUpperCase() + plot.plot_type.slice(1)}
+                </span>
+              </div>
+              <Link 
+                href={`/cemetery-map-unified?highlight=${plot.plot_number}`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all font-medium shadow-md hover:shadow-lg"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Show on Map
+              </Link>
             </div>
           </div>
         </div>
