@@ -5,10 +5,9 @@ import Link from 'next/link';
 import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
 
 interface CemeteryMapUnifiedProps {
-  highlightPlot?: string; // plot_number to scroll to and highlight
+  highlightPlot?: string;
 }
 
-// Section configuration - West to East
 const SECTIONS = [
   { id: 'A', name: 'Section A', westRoad: 'Azalea', eastRoad: 'Beech', color: 'from-emerald-500 to-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
   { id: 'B', name: 'Section B', westRoad: 'Beech', eastRoad: 'Chinquapin', color: 'from-teal-500 to-teal-700', bgColor: 'bg-teal-50', borderColor: 'border-teal-200' },
@@ -23,10 +22,15 @@ const SECTIONS = [
 export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnifiedProps) {
   const [allPlots, setAllPlots] = useState<Record<string, PlotWithDetails[]>>({});
   const [loading, setLoading] = useState(true);
+  const [currentSection, setCurrentSection] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<PlotWithDetails[]>([]);
   const [showSearch, setShowSearch] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const plotRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   useEffect(() => {
     loadAllPlots();
@@ -34,12 +38,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
   useEffect(() => {
     if (highlightPlot && !loading) {
-      // Scroll to highlighted plot after a short delay to ensure rendering is complete
       setTimeout(() => {
         const element = plotRefs.current[highlightPlot];
         if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Flash highlight effect
+          element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
           element.classList.add('ring-4', 'ring-yellow-400', 'ring-offset-2');
           setTimeout(() => {
             element.classList.remove('ring-4', 'ring-yellow-400', 'ring-offset-2');
@@ -81,6 +83,54 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     }
   };
 
+  const scrollToSection = (index: number) => {
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const sectionWidth = container.scrollWidth / SECTIONS.length;
+      container.scrollTo({
+        left: sectionWidth * index,
+        behavior: 'smooth'
+      });
+      setCurrentSection(index);
+    }
+  };
+
+  const handlePrevSection = () => {
+    if (currentSection > 0) {
+      scrollToSection(currentSection - 1);
+    }
+  };
+
+  const handleNextSection = () => {
+    if (currentSection < SECTIONS.length - 1) {
+      scrollToSection(currentSection + 1);
+    }
+  };
+
+  // Mouse drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
+    setScrollLeft(scrollContainerRef.current.scrollLeft);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2;
+    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
   const getDeceasedName = (plot: PlotWithDetails) => {
     const deceased = plot.deceased_records?.[0];
     if (deceased) {
@@ -97,85 +147,52 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     }
   };
 
-  // Render a single row as VERTICAL 4x2 matrix
   const renderRowMatrix = (
-    row: number, 
-    facingDirection: 'west' | 'east', 
+    row: number,
+    facingDirection: 'west' | 'east',
     rowPlots: PlotWithDetails[],
     sectionColor: string
   ) => {
-    // West (ascending): Normal order [1,5], [2,6], [3,7], [4,8]
-    // East (descending): Reversed order [8,4], [7,3], [6,2], [5,1]
     const positionPairs = facingDirection === 'west'
       ? [[1, 5], [2, 6], [3, 7], [4, 8]]
       : [[8, 4], [7, 3], [6, 2], [5, 1]];
-    
+
     return (
-      <div className="mb-2">
-        <div className="text-[9px] text-gray-500 mb-1">Row {row}</div>
-        <div className={`bg-white rounded border ${sectionColor} p-1`}>
+      <div className="mb-1.5" key={row}>
+        <div className="text-[8px] text-gray-500 mb-0.5">Row {row}</div>
+        <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
           {positionPairs.map(([pos1, pos2]) => (
             <div key={`${pos1}-${pos2}`} className="flex gap-0.5 mb-0.5 last:mb-0">
-              {/* Position 1-4 or 5-8 (left column) */}
-              {(() => {
-                const plot = rowPlots.find(p => p.plot_position === pos1);
+              {[pos1, pos2].map((pos) => {
+                const plot = rowPlots.find(p => p.plot_position === pos);
                 if (!plot) {
                   return (
-                    <div className="w-8 h-6 rounded-sm bg-gray-200 flex items-center justify-center">
-                      <span className="text-[8px] text-gray-400">{pos1}</span>
+                    <div key={pos} className="w-7 h-5 rounded-sm bg-gray-200 flex items-center justify-center">
+                      <span className="text-[7px] text-gray-400">{pos}</span>
                     </div>
                   );
                 }
                 const deceasedName = getDeceasedName(plot);
                 return (
                   <div
+                    key={pos}
                     ref={(el) => { plotRefs.current[plot.plot_number] = el; }}
                   >
                     <Link
                       href={`/plot/${plot.id}`}
                       className={`
-                        w-8 h-6 rounded-sm flex items-center justify-center 
+                        w-7 h-5 rounded-sm flex items-center justify-center
                         text-white shadow-sm border
-                        transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
+                        transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10
                         ${getStatusColor(plot.status)}
                       `}
                       title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
                     >
-                      <span className="text-[8px] font-bold">{pos1}</span>
+                      <span className="text-[7px] font-bold">{pos}</span>
                     </Link>
                   </div>
                 );
-              })()}
-              {/* Position 5-8 or 1-4 (right column) */}
-              {(() => {
-                const plot = rowPlots.find(p => p.plot_position === pos2);
-                if (!plot) {
-                  return (
-                    <div className="w-8 h-6 rounded-sm bg-gray-200 flex items-center justify-center">
-                      <span className="text-[8px] text-gray-400">{pos2}</span>
-                    </div>
-                  );
-                }
-                const deceasedName = getDeceasedName(plot);
-                return (
-                  <div
-                    ref={(el) => { plotRefs.current[plot.plot_number] = el; }}
-                  >
-                    <Link
-                      href={`/plot/${plot.id}`}
-                      className={`
-                        w-8 h-6 rounded-sm flex items-center justify-center 
-                        text-white shadow-sm border
-                        transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
-                        ${getStatusColor(plot.status)}
-                      `}
-                      title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                    >
-                      <span className="text-[8px] font-bold">{pos2}</span>
-                    </Link>
-                  </div>
-                );
-              })()}
+              })}
             </div>
           ))}
         </div>
@@ -183,100 +200,87 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     );
   };
 
-  // Render a single section
   const renderSection = (section: typeof SECTIONS[0]) => {
     const plots = allPlots[section.id] || [];
-    
-    // Group plots by row
     const plotsByRow: Record<number, PlotWithDetails[]> = {};
+    
     plots.forEach(plot => {
       const row = plot.row_number || 1;
       if (!plotsByRow[row]) plotsByRow[row] = [];
       plotsByRow[row].push(plot);
     });
-    
-    // Sort plots within each row by position
+
     Object.keys(plotsByRow).forEach(row => {
       plotsByRow[parseInt(row)].sort((a, b) => (a.plot_position || 0) - (b.plot_position || 0));
     });
-    
+
     const allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
     const westStripRows = allRows.filter(r => r <= 37);
     const eastStripRows = allRows.filter(r => r > 37);
 
     return (
-      <div key={section.id} id={`section-${section.id}`} className="mb-8 scroll-mt-20">
+      <div key={section.id} className="flex-shrink-0 w-full h-full flex flex-col px-2">
         {/* Section Header */}
-        <div className={`bg-gradient-to-r ${section.color} rounded-xl shadow-md p-4 mb-4`}>
+        <div className={`bg-gradient-to-r ${section.color} rounded-lg shadow-md p-3 mb-3`}>
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-2xl font-black text-white">{section.name}</h3>
-              <p className="text-white/80 text-sm">
+              <h3 className="text-xl font-black text-white">{section.name}</h3>
+              <p className="text-white/80 text-xs">
                 {section.westRoad} ↔ {section.eastRoad}
               </p>
             </div>
-            <div className="text-right bg-white/20 rounded-lg px-4 py-2">
-              <div className="text-2xl font-bold text-white">{plots.length}</div>
-              <div className="text-white/80 text-xs">Plots</div>
+            <div className="text-right bg-white/20 rounded-lg px-3 py-1.5">
+              <div className="text-lg font-bold text-white">{plots.length}</div>
+              <div className="text-white/80 text-[10px]">Plots</div>
             </div>
           </div>
         </div>
 
-        {/* Section Grid */}
-        <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
-          <div className="flex gap-2">
+        {/* Section Grid - Optimized Spacing */}
+        <div className="flex-1 bg-white rounded-lg shadow-md p-2 overflow-y-auto">
+          <div className="flex gap-1.5 h-full">
             {/* West Road Label */}
-            <div className="w-12 flex-shrink-0 bg-amber-100 rounded-lg flex items-center justify-center border-2 border-amber-300">
-              <span className="transform -rotate-90 whitespace-nowrap text-xs font-bold text-amber-800">
+            <div className="w-8 flex-shrink-0 bg-amber-100 rounded flex items-center justify-center border border-amber-300">
+              <span className="transform -rotate-90 whitespace-nowrap text-[10px] font-bold text-amber-800">
                 {section.westRoad}
               </span>
             </div>
 
-            {/* West Strip - LEFT JUSTIFIED (Ascending) */}
-            <div className={`flex-1 ${section.bgColor} rounded-lg p-3 border ${section.borderColor}`}>
+            {/* West Strip - LEFT JUSTIFIED */}
+            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor} overflow-y-auto`}>
               <div className="text-center mb-2">
-                <span className="text-xs font-bold text-gray-700 bg-white/50 px-2 py-1 rounded-full">
+                <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows 1-37 ↑
                 </span>
               </div>
-              
-              {/* Left-justified: flex items-start */}
               <div className="flex justify-start">
                 <div className="inline-block">
-                  {[...westStripRows].reverse().map((row) => 
+                  {[...westStripRows].reverse().map((row) =>
                     renderRowMatrix(row, 'west', plotsByRow[row] || [], section.borderColor)
-                  )}
-                  {westStripRows.length === 0 && (
-                    <div className="text-center text-gray-400 py-4 text-xs">No plots</div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* East Strip - RIGHT JUSTIFIED (Descending) */}
-            <div className={`flex-1 ${section.bgColor} rounded-lg p-3 border ${section.borderColor}`}>
+            {/* East Strip - RIGHT JUSTIFIED */}
+            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor} overflow-y-auto`}>
               <div className="text-center mb-2">
-                <span className="text-xs font-bold text-gray-700 bg-white/50 px-2 py-1 rounded-full">
+                <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows 38+ ↓
                 </span>
               </div>
-              
-              {/* Right-justified: flex items-end */}
               <div className="flex justify-end">
                 <div className="inline-block">
-                  {eastStripRows.map((row) => 
+                  {eastStripRows.map((row) =>
                     renderRowMatrix(row, 'east', plotsByRow[row] || [], section.borderColor)
-                  )}
-                  {eastStripRows.length === 0 && (
-                    <div className="text-center text-gray-400 py-4 text-xs">No plots</div>
                   )}
                 </div>
               </div>
             </div>
 
             {/* East Road Label */}
-            <div className="w-12 flex-shrink-0 bg-amber-100 rounded-lg flex items-center justify-center border-2 border-amber-300">
-              <span className="transform rotate-90 whitespace-nowrap text-xs font-bold text-amber-800">
+            <div className="w-8 flex-shrink-0 bg-amber-100 rounded flex items-center justify-center border border-amber-300">
+              <span className="transform rotate-90 whitespace-nowrap text-[10px] font-bold text-amber-800">
                 {section.eastRoad}
               </span>
             </div>
@@ -298,43 +302,48 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-50 bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="bg-white shadow-md border-b border-gray-200 z-50">
+        <div className="px-4 py-3">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Northwood Cemetery Map</h1>
-              <p className="text-gray-500 text-sm">Southport, NC • All Sections</p>
+              <h1 className="text-xl font-bold text-gray-800">Northwood Cemetery Map</h1>
+              <p className="text-gray-500 text-xs">Swipe or use arrows to navigate</p>
             </div>
             <form onSubmit={handleSearch} className="flex gap-2">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search name or plot..."
-                className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-64"
+                placeholder="Search..."
+                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-48"
               />
               <button
                 type="submit"
-                className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all font-medium"
+                className="px-4 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all font-medium"
               >
                 Search
               </button>
             </form>
           </div>
 
-          {/* Quick Section Navigation */}
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-            {SECTIONS.map((section) => (
-              <a
+          {/* Section Indicators */}
+          <div className="flex gap-2 mt-3 justify-center">
+            {SECTIONS.map((section, index) => (
+              <button
                 key={section.id}
-                href={`#section-${section.id}`}
-                className={`px-3 py-1 rounded-lg text-sm font-medium whitespace-nowrap transition-all
-                  bg-gradient-to-r ${section.color} text-white hover:shadow-lg`}
+                onClick={() => scrollToSection(index)}
+                className={`
+                  px-3 py-1 rounded-lg text-xs font-bold transition-all
+                  ${currentSection === index
+                    ? `bg-gradient-to-r ${section.color} text-white shadow-lg scale-110`
+                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                  }
+                `}
               >
                 {section.id}
-              </a>
+              </button>
             ))}
           </div>
         </div>
@@ -342,76 +351,101 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
       {/* Search Results */}
       {showSearch && searchResults.length > 0 && (
-        <div className="max-w-7xl mx-auto px-4 mt-4">
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">
-              Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
-            </h3>
-            <div className="grid gap-2 max-h-64 overflow-y-auto">
-              {searchResults.map((plot) => (
-                <Link
-                  key={plot.id}
-                  href={`/cemetery-map-unified?highlight=${plot.plot_number}`}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-emerald-50 transition-all"
-                >
-                  <div>
-                    <span className="font-semibold text-gray-800">{plot.plot_number}</span>
-                    {getDeceasedName(plot) && (
-                      <span className="ml-2 text-gray-600">• {getDeceasedName(plot)}</span>
-                    )}
-                  </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium text-white ${plot.status === 'occupied' ? 'bg-rose-500' : 'bg-emerald-500'}`}>
-                    {plot.status}
-                  </span>
-                </Link>
-              ))}
-            </div>
+        <div className="bg-white border-b border-gray-200 p-3 max-h-48 overflow-y-auto">
+          <h3 className="text-sm font-bold text-gray-800 mb-2">
+            Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+          </h3>
+          <div className="grid gap-1.5">
+            {searchResults.map((plot) => (
+              <Link
+                key={plot.id}
+                href={`/cemetery-map-unified?highlight=${plot.plot_number}`}
+                className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-emerald-50 transition-all text-sm"
+              >
+                <div>
+                  <span className="font-semibold text-gray-800">{plot.plot_number}</span>
+                  {getDeceasedName(plot) && (
+                    <span className="ml-2 text-gray-600 text-xs">• {getDeceasedName(plot)}</span>
+                  )}
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Legend */}
-        <div className="bg-white rounded-xl shadow-md p-4 mb-6 border border-gray-100">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-700">Legend:</span>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-emerald-400 border border-emerald-500"></div>
-                <span className="text-xs text-gray-600">Available</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-rose-500 border border-rose-600"></div>
-                <span className="text-xs text-gray-600">Occupied</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-amber-400 border border-amber-500"></div>
-                <span className="text-xs text-gray-600">Reserved</span>
-              </div>
-            </div>
-            <div className="text-sm text-gray-500">
-              West (Left) ↑ Ascending • East (Right) ↓ Descending
-            </div>
+      {/* Legend */}
+      <div className="bg-white border-b border-gray-200 px-4 py-2">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded bg-emerald-400 border border-emerald-500"></div>
+            <span className="text-gray-600">Available</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded bg-rose-500 border border-rose-600"></div>
+            <span className="text-gray-600">Occupied</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded bg-amber-400 border border-amber-500"></div>
+            <span className="text-gray-600">Reserved</span>
+          </div>
+          <span className="text-gray-500">West (Left) ↑ • East (Right) ↓</span>
         </div>
+      </div>
 
-        {/* North Indicator */}
-        <div className="text-center mb-6">
-          <span className="inline-block bg-gray-700 text-white px-6 py-2 rounded-full text-sm font-medium shadow-md">
-            ↑ FODALE AVE (North)
-          </span>
+      {/* North Indicator */}
+      <div className="text-center py-2 bg-gray-100">
+        <span className="inline-block bg-gray-700 text-white px-4 py-1 rounded-full text-xs font-medium">
+          ↑ FODALE AVE (North)
+        </span>
+      </div>
+
+      {/* Main Carousel Container */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Navigation Arrows */}
+        {currentSection > 0 && (
+          <button
+            onClick={handlePrevSection}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-3 transition-all"
+          >
+            <svg className="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+        
+        {currentSection < SECTIONS.length - 1 && (
+          <button
+            onClick={handleNextSection}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-3 transition-all"
+          >
+            <svg className="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Scrollable Sections */}
+        <div
+          ref={scrollContainerRef}
+          className={`flex h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth ${
+            isDragging ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        >
+          {SECTIONS.map(renderSection)}
         </div>
+      </div>
 
-        {/* All Sections */}
-        {SECTIONS.map(renderSection)}
-
-        {/* South Indicator */}
-        <div className="text-center mt-6">
-          <span className="inline-block bg-gray-700 text-white px-6 py-2 rounded-full text-sm font-medium shadow-md">
-            ↓ SWEET BAY (South)
-          </span>
-        </div>
+      {/* South Indicator */}
+      <div className="text-center py-2 bg-gray-100">
+        <span className="inline-block bg-gray-700 text-white px-4 py-1 rounded-full text-xs font-medium">
+          ↓ SWEET BAY (South)
+        </span>
       </div>
     </div>
   );
