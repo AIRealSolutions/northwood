@@ -31,6 +31,17 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Detect mobile
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     loadAllPlots();
@@ -84,7 +95,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
   };
 
   const scrollToSection = (index: number) => {
-    if (scrollContainerRef.current) {
+    if (scrollContainerRef.current && isMobile) {
       const container = scrollContainerRef.current;
       const sectionWidth = container.scrollWidth / SECTIONS.length;
       container.scrollTo({
@@ -107,7 +118,6 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     }
   };
 
-  // Mouse drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!scrollContainerRef.current) return;
     setIsDragging(true);
@@ -200,7 +210,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     );
   };
 
-  const renderSection = (section: typeof SECTIONS[0]) => {
+  const renderSection = (section: typeof SECTIONS[0], index: number) => {
     const plots = allPlots[section.id] || [];
     const plotsByRow: Record<number, PlotWithDetails[]> = {};
     
@@ -219,7 +229,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     const eastStripRows = allRows.filter(r => r > 37);
 
     return (
-      <div key={section.id} className="flex-shrink-0 w-full h-full flex flex-col px-2">
+      <div 
+        key={section.id} 
+        className={`flex-shrink-0 h-full flex flex-col ${isMobile ? 'w-full px-2' : 'px-3'}`}
+      >
         {/* Section Header */}
         <div className={`bg-gradient-to-r ${section.color} rounded-lg shadow-md p-3 mb-3`}>
           <div className="flex items-center justify-between">
@@ -236,7 +249,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
           </div>
         </div>
 
-        {/* Section Grid - Optimized Spacing */}
+        {/* Section Grid */}
         <div className="flex-1 bg-white rounded-lg shadow-md p-2 overflow-y-auto">
           <div className="flex gap-1.5 h-full">
             {/* West Road Label */}
@@ -286,6 +299,15 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
           </div>
         </div>
+
+        {/* Road Gap (maximized spacing between sections) */}
+        {index < SECTIONS.length - 1 && (
+          <div className={`flex-shrink-0 ${isMobile ? 'w-0' : 'w-16'} bg-amber-50 border-x-4 border-amber-300 flex items-center justify-center`}>
+            <span className="transform rotate-90 whitespace-nowrap text-xs font-bold text-amber-700">
+              {section.eastRoad} Road
+            </span>
+          </div>
+        )}
       </div>
     );
   };
@@ -309,7 +331,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold text-gray-800">Northwood Cemetery Map</h1>
-              <p className="text-gray-500 text-xs">Swipe or use arrows to navigate</p>
+              <p className="text-gray-500 text-xs">
+                {isMobile ? 'Swipe left/right to navigate sections' : 'Scroll horizontally to view all sections'}
+              </p>
             </div>
             <form onSubmit={handleSearch} className="flex gap-2">
               <input
@@ -328,24 +352,26 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </form>
           </div>
 
-          {/* Section Indicators */}
-          <div className="flex gap-2 mt-3 justify-center">
-            {SECTIONS.map((section, index) => (
-              <button
-                key={section.id}
-                onClick={() => scrollToSection(index)}
-                className={`
-                  px-3 py-1 rounded-lg text-xs font-bold transition-all
-                  ${currentSection === index
-                    ? `bg-gradient-to-r ${section.color} text-white shadow-lg scale-110`
-                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                  }
-                `}
-              >
-                {section.id}
-              </button>
-            ))}
-          </div>
+          {/* Section Indicators - Mobile Only */}
+          {isMobile && (
+            <div className="flex gap-2 mt-3 justify-center">
+              {SECTIONS.map((section, index) => (
+                <button
+                  key={section.id}
+                  onClick={() => scrollToSection(index)}
+                  className={`
+                    px-3 py-1 rounded-lg text-xs font-bold transition-all
+                    ${currentSection === index
+                      ? `bg-gradient-to-r ${section.color} text-white shadow-lg scale-110`
+                      : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }
+                  `}
+                >
+                  {section.id}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -359,7 +385,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             {searchResults.map((plot) => (
               <Link
                 key={plot.id}
-                href={`/cemetery-map-unified?highlight=${plot.plot_number}`}
+                href={`/cemetery-map?highlight=${plot.plot_number}`}
                 className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-emerald-50 transition-all text-sm"
               >
                 <div>
@@ -400,10 +426,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
         </span>
       </div>
 
-      {/* Main Carousel Container */}
+      {/* Main Map Container */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Navigation Arrows */}
-        {currentSection > 0 && (
+        {/* Navigation Arrows - Mobile Only */}
+        {isMobile && currentSection > 0 && (
           <button
             onClick={handlePrevSection}
             className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-3 transition-all"
@@ -414,7 +440,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
           </button>
         )}
         
-        {currentSection < SECTIONS.length - 1 && (
+        {isMobile && currentSection < SECTIONS.length - 1 && (
           <button
             onClick={handleNextSection}
             className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-3 transition-all"
@@ -428,16 +454,20 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
         {/* Scrollable Sections */}
         <div
           ref={scrollContainerRef}
-          className={`flex h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth ${
-            isDragging ? 'cursor-grabbing' : 'cursor-grab'
-          }`}
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          className={`flex h-full overflow-x-auto overflow-y-hidden ${
+            isMobile ? 'snap-x snap-mandatory' : ''
+          } scroll-smooth ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          style={{ scrollbarWidth: 'thin' }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
         >
-          {SECTIONS.map(renderSection)}
+          {SECTIONS.map((section, index) => (
+            <React.Fragment key={section.id}>
+              {renderSection(section, index)}
+            </React.Fragment>
+          ))}
         </div>
       </div>
 

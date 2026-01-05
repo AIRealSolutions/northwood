@@ -202,7 +202,7 @@ export default function PlotDetailsPage() {
                 </span>
               </div>
               <Link 
-                href={`/cemetery-map-unified?highlight=${plot.plot_number}`}
+                href={`/cemetery-map?highlight=${plot.plot_number}`}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all font-medium shadow-md hover:shadow-lg"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
