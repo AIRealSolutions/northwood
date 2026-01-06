@@ -231,7 +231,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     return (
       <div 
         key={section.id} 
-        className={`flex-shrink-0 h-full flex flex-col ${isMobile ? 'w-full px-2' : 'px-3'}`}
+        className={`flex-shrink-0 min-h-full flex flex-col ${isMobile ? 'w-full px-2' : 'px-3'}`}
       >
         {/* Section Header */}
         <div className={`bg-gradient-to-r ${section.color} rounded-lg shadow-md p-3 mb-3`}>
@@ -454,7 +454,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
         {/* Scrollable Sections */}
         <div
           ref={scrollContainerRef}
-          className={`flex h-full overflow-auto ${
+          className={`flex h-full overflow-x-auto ${
             isMobile ? 'snap-x snap-mandatory' : ''
           } scroll-smooth ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{ scrollbarWidth: 'thin' }}
