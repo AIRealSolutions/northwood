@@ -9,14 +9,15 @@ interface CemeteryMapUnifiedProps {
 }
 
 const SECTIONS = [
-  { id: 'A', name: 'Section A', westRoad: 'Azalea', eastRoad: 'Beech', color: 'from-emerald-500 to-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
-  { id: 'B', name: 'Section B', westRoad: 'Beech', eastRoad: 'Chinquapin', color: 'from-teal-500 to-teal-700', bgColor: 'bg-teal-50', borderColor: 'border-teal-200' },
-  { id: 'C', name: 'Section C', westRoad: 'Chinquapin', eastRoad: 'Dogwood', color: 'from-cyan-500 to-cyan-700', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
-  { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm', color: 'from-sky-500 to-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200' },
-  { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig', color: 'from-blue-500 to-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-  { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia', color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
-  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200' },
-  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hibiscus', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
+  { id: 'A', name: 'Section A', westRoad: 'Azalea', eastRoad: 'Beech', color: 'from-emerald-500 to-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', maxRow: 74 },
+  { id: 'B', name: 'Section B', westRoad: 'Beech', eastRoad: 'Chinquapin', color: 'from-teal-500 to-teal-700', bgColor: 'bg-teal-50', borderColor: 'border-teal-200', maxRow: 74 },
+  { id: 'C', name: 'Section C', westRoad: 'Chinquapin', eastRoad: 'Dogwood', color: 'from-cyan-500 to-cyan-700', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200', maxRow: 74 },
+  { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm', color: 'from-sky-500 to-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', maxRow: 74 },
+  { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig', color: 'from-blue-500 to-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', maxRow: 74 },
+  { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia', color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74 },
+  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74 },
+  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hibiscus', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74 },
+  { id: 'I', name: 'Section I', westRoad: 'Hibiscus', eastRoad: 'Residential', color: 'from-pink-500 to-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200', minRow: 75 },
 ];
 
 export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnifiedProps) {
@@ -67,7 +68,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     try {
       const plotsData: Record<string, PlotWithDetails[]> = {};
       for (const section of SECTIONS) {
-        const sectionPlots = await plotsAPI.getPlotsBySection(section.id);
+        // Section I uses Section H plots (rows 75+)
+        const sectionId = section.id === 'I' ? 'H' : section.id;
+        const sectionPlots = await plotsAPI.getPlotsBySection(sectionId);
         plotsData[section.id] = sectionPlots;
       }
       setAllPlots(plotsData);
@@ -224,7 +227,16 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       plotsByRow[parseInt(row)].sort((a, b) => (a.plot_position || 0) - (b.plot_position || 0));
     });
 
-    const allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
+    let allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
+    
+    // Filter rows based on section's minRow and maxRow
+    if (section.minRow) {
+      allRows = allRows.filter(r => r >= section.minRow!);
+    }
+    if (section.maxRow) {
+      allRows = allRows.filter(r => r <= section.maxRow!);
+    }
+    
     const westStripRows = allRows.filter(r => r <= 37);
     const eastStripRows = allRows.filter(r => r > 37);
 
