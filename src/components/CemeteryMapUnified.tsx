@@ -250,7 +250,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
         </div>
 
         {/* Section Grid */}
-        <div className="flex-1 bg-white rounded-lg shadow-md p-2 overflow-y-auto">
+        <div className="flex-1 bg-white rounded-lg shadow-md p-2">
           <div className="flex gap-1.5 h-full">
             {/* West Road Label */}
             <div className="w-8 flex-shrink-0 bg-amber-100 rounded flex items-center justify-center border border-amber-300">
@@ -260,7 +260,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
 
             {/* West Strip - LEFT JUSTIFIED */}
-            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor} overflow-y-auto`}>
+            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor}`}>
               <div className="text-center mb-2">
                 <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows 1-37 ↑
@@ -276,7 +276,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
 
             {/* East Strip - RIGHT JUSTIFIED */}
-            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor} overflow-y-auto`}>
+            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor}`}>
               <div className="text-center mb-2">
                 <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows 38+ ↓
@@ -454,7 +454,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
         {/* Scrollable Sections */}
         <div
           ref={scrollContainerRef}
-          className={`flex h-full overflow-x-auto overflow-y-hidden ${
+          className={`flex h-full overflow-auto ${
             isMobile ? 'snap-x snap-mandatory' : ''
           } scroll-smooth ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{ scrollbarWidth: 'thin' }}
