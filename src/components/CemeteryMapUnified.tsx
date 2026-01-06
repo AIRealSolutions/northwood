@@ -231,10 +231,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     return (
       <div 
         key={section.id} 
-        className={`flex-shrink-0 min-h-full flex flex-col ${isMobile ? 'w-full px-2' : 'px-3'}`}
+        className={`flex-shrink-0 min-h-full flex flex-col ${isMobile ? 'w-full px-1' : 'px-1'}`}
       >
         {/* Section Header */}
-        <div className={`bg-gradient-to-r ${section.color} rounded-lg shadow-md p-3 mb-3`}>
+        <div className={`bg-gradient-to-r ${section.color} rounded-lg shadow-md p-2 mb-1`}>
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-black text-white">{section.name}</h3>
@@ -250,8 +250,8 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
         </div>
 
         {/* Section Grid */}
-        <div className="flex-1 bg-white rounded-lg shadow-md p-2">
-          <div className="flex gap-1.5 h-full">
+        <div className="flex-1 bg-white rounded-lg shadow-md p-1">
+          <div className="flex gap-1 h-full">
             {/* West Road Label */}
             <div className="w-8 flex-shrink-0 bg-amber-100 rounded flex items-center justify-center border border-amber-300">
               <span className="transform -rotate-90 whitespace-nowrap text-[10px] font-bold text-amber-800">
@@ -260,7 +260,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
 
             {/* West Strip - LEFT JUSTIFIED */}
-            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor}`}>
+            <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
               <div className="text-center mb-2">
                 <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows 1-37 ↑
@@ -276,7 +276,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
 
             {/* East Strip - RIGHT JUSTIFIED */}
-            <div className={`flex-1 ${section.bgColor} rounded p-2 border ${section.borderColor}`}>
+            <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
               <div className="text-center mb-2">
                 <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows 38+ ↓
@@ -327,8 +327,8 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="bg-white shadow-md border-b border-gray-200 z-50">
-        <div className="px-4 py-3">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="px-2 py-1.5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
             <div>
               <h1 className="text-xl font-bold text-gray-800">Northwood Cemetery Map</h1>
               <p className="text-gray-500 text-xs">
@@ -354,7 +354,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
           {/* Section Indicators - Mobile Only */}
           {isMobile && (
-            <div className="flex gap-2 mt-3 justify-center">
+            <div className="flex gap-2 mt-1.5 justify-center">
               {SECTIONS.map((section, index) => (
                 <button
                   key={section.id}
@@ -401,7 +401,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       )}
 
       {/* Legend */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2">
+      <div className="bg-white border-b border-gray-200 px-2 py-1">
         <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded bg-emerald-400 border border-emerald-500"></div>
@@ -420,7 +420,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       </div>
 
       {/* North Indicator */}
-      <div className="text-center py-2 bg-gray-100">
+      <div className="text-center py-1 bg-gray-100">
         <span className="inline-block bg-gray-700 text-white px-4 py-1 rounded-full text-xs font-medium">
           ↑ FODALE AVE (North)
         </span>
@@ -472,7 +472,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       </div>
 
       {/* South Indicator */}
-      <div className="text-center py-2 bg-gray-100">
+      <div className="text-center py-1 bg-gray-100">
         <span className="inline-block bg-gray-700 text-white px-4 py-1 rounded-full text-xs font-medium">
           ↓ SWEET BAY (South)
         </span>
