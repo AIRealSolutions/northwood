@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
 CREATE TABLE IF NOT EXISTS user_deceased_connections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  deceased_id UUID NOT NULL REFERENCES deceased(id) ON DELETE CASCADE,
+  deceased_id UUID NOT NULL REFERENCES deceased_records(id) ON DELETE CASCADE,
   relationship VARCHAR(50), -- 'spouse', 'child', 'parent', 'sibling', 'friend', 'other'
   relationship_description TEXT,
   verified BOOLEAN DEFAULT FALSE, -- Admin verification
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS user_deceased_connections (
 -- Media uploads (photos, videos, documents)
 CREATE TABLE IF NOT EXISTS media (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  deceased_id UUID NOT NULL REFERENCES deceased(id) ON DELETE CASCADE,
+  deceased_id UUID NOT NULL REFERENCES deceased_records(id) ON DELETE CASCADE,
   uploaded_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   media_type VARCHAR(20) NOT NULL, -- 'photo', 'video', 'document', 'audio'
   file_name VARCHAR(255) NOT NULL,
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS media_tags (
 -- User-submitted memories and stories
 CREATE TABLE IF NOT EXISTS memories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  deceased_id UUID NOT NULL REFERENCES deceased(id) ON DELETE CASCADE,
+  deceased_id UUID NOT NULL REFERENCES deceased_records(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title VARCHAR(255),
   content TEXT NOT NULL,
@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS memories (
 -- Shareable links for memorial pages
 CREATE TABLE IF NOT EXISTS share_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  deceased_id UUID NOT NULL REFERENCES deceased(id) ON DELETE CASCADE,
+  deceased_id UUID NOT NULL REFERENCES deceased_records(id) ON DELETE CASCADE,
   share_token VARCHAR(100) UNIQUE NOT NULL,
   created_by UUID REFERENCES users(id),
   access_count INTEGER DEFAULT 0,
@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS share_links (
 -- QR codes for gravesites
 CREATE TABLE IF NOT EXISTS qr_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  deceased_id UUID REFERENCES deceased(id) ON DELETE CASCADE,
+  deceased_id UUID REFERENCES deceased_records(id) ON DELETE CASCADE,
   plot_id UUID REFERENCES plots(id) ON DELETE CASCADE,
   qr_code_data TEXT NOT NULL, -- QR code content
   qr_code_image_path VARCHAR(500), -- Path to QR image file
