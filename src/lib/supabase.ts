@@ -357,5 +357,5 @@ export const deceasedAPI = {
   }
 };
 
-// Export the supabase client for direct use if needed
-export { supabase };
+// Export the supabase client and helper for direct use if needed
+export { supabase, getSupabase };
