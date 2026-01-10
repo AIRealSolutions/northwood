@@ -1,21 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
+import Navigation from "@/components/Navigation";
 
 export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full max-w-5xl flex-col items-center justify-between py-16 px-8 bg-white dark:bg-black sm:items-start">
-        <div className="w-full flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-black dark:text-zinc-50">Northwood Cemetery</h1>
-          <Image
-            className="dark:invert"
-            src="/vercel.svg"
-            alt="Vercel logo"
-            width={100}
-            height={20}
-            priority
-          />
-        </div>
+        <Navigation />
         
         <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left my-12">
           <h2 className="max-w-2xl text-4xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
