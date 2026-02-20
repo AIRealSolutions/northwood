@@ -745,9 +745,13 @@ function ChangeRequestForm({ initialPlot, initialOccupant, initialType }: {
 
 // ─── Main Page Component ───────────────────────────────────────────────────────
 
+const COMMITTEE_ROLES = ['admin', 'cemetery_committee', 'superintendent'];
+
 function CemeteryCommitteeContent() {
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [activeSection, setActiveSection] = useState<'home' | 'meetings' | 'submit-agenda' | 'change-request'>('home');
+  const isCommitteeMember = COMMITTEE_ROLES.includes(session?.user?.role || '');
   const [members, setMembers] = useState<CommitteeMember[]>([]);
   const [upcoming, setUpcoming] = useState<Meeting[]>([]);
   const [recent, setRecent] = useState<Meeting[]>([]);
@@ -817,6 +821,15 @@ function CemeteryCommitteeContent() {
               </button>
             ))}
           </nav>
+          {/* My Profile link for committee members */}
+          {isCommitteeMember && (
+            <Link
+              href="/committee/my-profile"
+              className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-green-700 hover:bg-green-50 border border-green-200 transition-colors ml-2"
+            >
+              <span>✏️</span> My Profile
+            </Link>
+          )}
           {/* Mobile nav */}
           <select
             value={activeSection}
