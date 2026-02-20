@@ -27,7 +27,7 @@ export default function AdminDashboard() {
       return;
     }
 
-    if (session.user?.role !== 'admin' && session.user?.role !== 'superintendent') {
+    if (session.user?.role !== 'admin' && session.user?.role !== 'superintendent' && session.user?.role !== 'cemetery_committee') {
       router.push('/');
       return;
     }
@@ -65,7 +65,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!session || (session.user?.role !== 'admin' && session.user?.role !== 'superintendent')) {
+  if (!session || (session.user?.role !== 'admin' && session.user?.role !== 'superintendent' && session.user?.role !== 'cemetery_committee')) {
     return null;
   }
 
@@ -161,6 +161,12 @@ export default function AdminDashboard() {
               title="Family Requests"
               description="Verify family connections"
               icon="🔗"
+            />
+            <ActionButton
+              href="/admin/committee"
+              title="Cemetery Committee"
+              description="Meetings, agendas, goals, change requests"
+              icon="🏛️"
             />
             <ActionButton
               href="/admin/settings"

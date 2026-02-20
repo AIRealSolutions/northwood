@@ -237,9 +237,20 @@ export default function PlotDetailsPage() {
                       <div key={person.id} className={`${index > 0 ? 'border-t border-gray-200 dark:border-gray-700 pt-6' : ''}`}>
                         {/* Name and Dates - Primary Display */}
                         <div className="mb-4">
-                          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-                            {fullName}
-                          </h3>
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                              {fullName}
+                            </h3>
+                            <Link
+                              href={`/cemetery-committee?section=change-request&plot=${encodeURIComponent(plot.plot_number)}&occupant=${encodeURIComponent(fullName)}&type=occupant_details`}
+                              className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 rounded-lg transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Submit Correction
+                            </Link>
+                          </div>
                           {person.maiden_name && (
                             <p className="text-gray-600 dark:text-gray-400 italic mb-2">
                               née {person.maiden_name}
@@ -444,7 +455,27 @@ export default function PlotDetailsPage() {
                 >
                   Browse All Records
                 </Link>
+                <Link
+                  href={`/cemetery-committee?section=change-request&plot=${encodeURIComponent(plot.plot_number)}&occupant=${encodeURIComponent(deceased.map((d: DeceasedRecord) => [d.first_name, d.last_name].filter(Boolean).join(' ')).join(', '))}`}
+                  className="block w-full text-center bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 px-4 py-2 rounded-lg transition-colors font-medium"
+                >
+                  ✏️ Submit a Correction
+                </Link>
               </div>
+            </div>
+
+            {/* Correction Notice */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-1">Know something we don&apos;t?</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                If you have additional information, photos, or corrections for this plot, please submit a request to the Cemetery Committee.
+              </p>
+              <Link
+                href={`/cemetery-committee?section=change-request&plot=${encodeURIComponent(plot.plot_number)}`}
+                className="inline-block mt-2 text-xs font-medium text-amber-700 dark:text-amber-300 underline hover:no-underline"
+              >
+                Submit a correction or media →
+              </Link>
             </div>
           </div>
         </div>
