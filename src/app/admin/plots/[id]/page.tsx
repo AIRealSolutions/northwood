@@ -111,6 +111,102 @@ export default function AdminPlotDetailPage() {
   const [editSuccess, setEditSuccess] = useState('');
   const [showEditForm, setShowEditForm] = useState(false);
 
+  // Add / Edit Deceased Record state
+  const [showAddDeceased, setShowAddDeceased] = useState(false);
+  const [editingDeceased, setEditingDeceased] = useState<DeceasedRecord | null>(null);
+  const [deceasedForm, setDeceasedForm] = useState({
+    first_name: '', last_name: '', middle_name: '', maiden_name: '',
+    birth_date: '', death_date: '', burial_date: '', age_at_death: '',
+    gender: '', veteran_status: false, military_branch: '',
+    obituary: '', epitaph: '', next_of_kin: '', funeral_home: '',
+    burial_permit_number: '', death_certificate_number: '', notes: '',
+  });
+  const [deceasedLoading, setDeceasedLoading] = useState(false);
+  const [deceasedError, setDeceasedError] = useState('');
+  const [deceasedSuccess, setDeceasedSuccess] = useState('');
+
+  const openAddDeceased = () => {
+    setEditingDeceased(null);
+    setDeceasedForm({
+      first_name: '', last_name: '', middle_name: '', maiden_name: '',
+      birth_date: '', death_date: '', burial_date: '', age_at_death: '',
+      gender: '', veteran_status: false, military_branch: '',
+      obituary: '', epitaph: '', next_of_kin: '', funeral_home: '',
+      burial_permit_number: '', death_certificate_number: '', notes: '',
+    });
+    setDeceasedError('');
+    setDeceasedSuccess('');
+    setShowAddDeceased(true);
+  };
+
+  const openEditDeceased = (record: DeceasedRecord) => {
+    setEditingDeceased(record);
+    setDeceasedForm({
+      first_name: record.first_name || '',
+      last_name: record.last_name || '',
+      middle_name: (record as any).middle_name || '',
+      maiden_name: record.maiden_name || '',
+      birth_date: record.birth_date ? record.birth_date.split('T')[0] : '',
+      death_date: record.death_date ? record.death_date.split('T')[0] : '',
+      burial_date: (record as any).burial_date ? (record as any).burial_date.split('T')[0] : '',
+      age_at_death: record.age_at_death ? String(record.age_at_death) : '',
+      gender: (record as any).gender || '',
+      veteran_status: (record as any).veteran_status || false,
+      military_branch: (record as any).military_branch || '',
+      obituary: (record as any).obituary || '',
+      epitaph: (record as any).epitaph || '',
+      next_of_kin: (record as any).next_of_kin || '',
+      funeral_home: (record as any).funeral_home || '',
+      burial_permit_number: (record as any).burial_permit_number || '',
+      death_certificate_number: (record as any).death_certificate_number || '',
+      notes: record.notes || '',
+    });
+    setDeceasedError('');
+    setDeceasedSuccess('');
+    setShowAddDeceased(true);
+  };
+
+  const handleDeceasedSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!plot) return;
+    setDeceasedLoading(true);
+    setDeceasedError('');
+    setDeceasedSuccess('');
+    try {
+      const url = editingDeceased
+        ? `/api/admin/deceased/${editingDeceased.id}`
+        : '/api/admin/deceased';
+      const method = editingDeceased ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...deceasedForm, plot_id: plot.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setDeceasedSuccess(editingDeceased ? 'Record updated.' : 'Deceased record added.');
+      setShowAddDeceased(false);
+      setEditingDeceased(null);
+      fetchPlot();
+    } catch (err: any) {
+      setDeceasedError(err.message || 'Failed to save record');
+    } finally {
+      setDeceasedLoading(false);
+    }
+  };
+
+  const handleDeleteDeceased = async (recordId: string, name: string) => {
+    if (!confirm(`Delete record for ${name}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/admin/deceased/${recordId}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      fetchPlot();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete record');
+    }
+  };
+
   useEffect(() => {
     if (status === 'loading') return;
     if (!session) {
@@ -756,37 +852,227 @@ export default function AdminPlotDetailPage() {
                     ({plot.deceased_records?.length || 0})
                   </span>
                 </h2>
+                <button
+                  onClick={openAddDeceased}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  + Add Record
+                </button>
               </div>
+
+              {/* Add / Edit Deceased Form */}
+              {showAddDeceased && (
+                <div className="px-6 py-5 border-b border-emerald-100 bg-emerald-50">
+                  <h3 className="text-sm font-semibold text-emerald-800 mb-4">
+                    {editingDeceased ? `Edit: ${editingDeceased.first_name} ${editingDeceased.last_name}` : 'Add Deceased Record'}
+                  </h3>
+                  {deceasedError && (
+                    <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{deceasedError}</div>
+                  )}
+                  <form onSubmit={handleDeceasedSubmit} className="space-y-4">
+                    {/* Name row */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
+                        <input type="text" required value={deceasedForm.first_name}
+                          onChange={e => setDeceasedForm(f => ({ ...f, first_name: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
+                        <input type="text" required value={deceasedForm.last_name}
+                          onChange={e => setDeceasedForm(f => ({ ...f, last_name: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Middle Name</label>
+                        <input type="text" value={deceasedForm.middle_name}
+                          onChange={e => setDeceasedForm(f => ({ ...f, middle_name: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Maiden Name</label>
+                        <input type="text" value={deceasedForm.maiden_name}
+                          onChange={e => setDeceasedForm(f => ({ ...f, maiden_name: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                    </div>
+                    {/* Dates row */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Date of Birth</label>
+                        <input type="date" value={deceasedForm.birth_date}
+                          onChange={e => setDeceasedForm(f => ({ ...f, birth_date: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Date of Death</label>
+                        <input type="date" value={deceasedForm.death_date}
+                          onChange={e => setDeceasedForm(f => ({ ...f, death_date: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Burial Date</label>
+                        <input type="date" value={deceasedForm.burial_date}
+                          onChange={e => setDeceasedForm(f => ({ ...f, burial_date: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                    </div>
+                    {/* Age / Gender / Veteran */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Age at Death</label>
+                        <input type="number" min="0" max="130" value={deceasedForm.age_at_death}
+                          onChange={e => setDeceasedForm(f => ({ ...f, age_at_death: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
+                        <select value={deceasedForm.gender}
+                          onChange={e => setDeceasedForm(f => ({ ...f, gender: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                          <option value="">—</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end pb-2">
+                        <label className="flex items-center gap-2 text-xs font-medium text-gray-600 cursor-pointer">
+                          <input type="checkbox" checked={deceasedForm.veteran_status}
+                            onChange={e => setDeceasedForm(f => ({ ...f, veteran_status: e.target.checked }))}
+                            className="rounded border-gray-300 text-emerald-600" />
+                          Military Veteran
+                        </label>
+                      </div>
+                    </div>
+                    {deceasedForm.veteran_status && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Military Branch</label>
+                        <input type="text" value={deceasedForm.military_branch}
+                          onChange={e => setDeceasedForm(f => ({ ...f, military_branch: e.target.value }))}
+                          placeholder="e.g. U.S. Army"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                    )}
+                    {/* Next of Kin / Funeral Home */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Next of Kin</label>
+                        <input type="text" value={deceasedForm.next_of_kin}
+                          onChange={e => setDeceasedForm(f => ({ ...f, next_of_kin: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Funeral Home</label>
+                        <input type="text" value={deceasedForm.funeral_home}
+                          onChange={e => setDeceasedForm(f => ({ ...f, funeral_home: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                    </div>
+                    {/* Permit / Certificate */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Burial Permit #</label>
+                        <input type="text" value={deceasedForm.burial_permit_number}
+                          onChange={e => setDeceasedForm(f => ({ ...f, burial_permit_number: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Death Certificate #</label>
+                        <input type="text" value={deceasedForm.death_certificate_number}
+                          onChange={e => setDeceasedForm(f => ({ ...f, death_certificate_number: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                      </div>
+                    </div>
+                    {/* Epitaph */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Epitaph</label>
+                      <input type="text" value={deceasedForm.epitaph}
+                        onChange={e => setDeceasedForm(f => ({ ...f, epitaph: e.target.value }))}
+                        placeholder="Inscription or epitaph"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                    </div>
+                    {/* Obituary */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Obituary</label>
+                      <textarea rows={3} value={deceasedForm.obituary}
+                        onChange={e => setDeceasedForm(f => ({ ...f, obituary: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none" />
+                    </div>
+                    {/* Notes */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Internal Notes</label>
+                      <textarea rows={2} value={deceasedForm.notes}
+                        onChange={e => setDeceasedForm(f => ({ ...f, notes: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none" />
+                    </div>
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-1">
+                      <button type="submit" disabled={deceasedLoading}
+                        className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                        {deceasedLoading ? 'Saving…' : (editingDeceased ? 'Update Record' : 'Add Record')}
+                      </button>
+                      <button type="button" onClick={() => { setShowAddDeceased(false); setEditingDeceased(null); }}
+                        className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
               {plot.deceased_records && plot.deceased_records.length > 0 ? (
                 <div className="divide-y divide-gray-50">
                   {plot.deceased_records.map((record) => (
                     <div key={record.id} className="px-6 py-4">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {record.first_name} {record.last_name}
-                        {record.maiden_name && (
-                          <span className="text-gray-400 font-normal"> née {record.maiden_name}</span>
-                        )}
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
-                        {record.birth_date && (
-                          <span>b. {new Date(record.birth_date).toLocaleDateString()}</span>
-                        )}
-                        {record.death_date && (
-                          <span>d. {new Date(record.death_date).toLocaleDateString()}</span>
-                        )}
-                        {record.age_at_death && (
-                          <span>Age {record.age_at_death}</span>
-                        )}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">
+                            {record.first_name} {record.last_name}
+                            {record.maiden_name && (
+                              <span className="text-gray-400 font-normal"> née {record.maiden_name}</span>
+                            )}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
+                            {record.birth_date && (
+                              <span>b. {new Date(record.birth_date).toLocaleDateString()}</span>
+                            )}
+                            {record.death_date && (
+                              <span>d. {new Date(record.death_date).toLocaleDateString()}</span>
+                            )}
+                            {record.age_at_death && (
+                              <span>Age {record.age_at_death}</span>
+                            )}
+                          </div>
+                          {record.notes && (
+                            <p className="text-xs text-gray-400 mt-1 italic">{record.notes}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => openEditDeceased(record)}
+                            className="px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDeceased(record.id, `${record.first_name} ${record.last_name}`)}
+                            className="px-2.5 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                      {record.notes && (
-                        <p className="text-xs text-gray-400 mt-1 italic">{record.notes}</p>
-                      )}
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="px-6 py-8 text-center text-gray-400">
                   <p className="text-sm">No deceased records associated with this plot.</p>
+                  <p className="text-xs mt-1">Use the &ldquo;+ Add Record&rdquo; button above to add one.</p>
                 </div>
               )}
             </div>
