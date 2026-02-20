@@ -128,65 +128,11 @@ export async function PUT(
   }
 }
 
-// DELETE /api/admin/plots/[id] - Delete a plot
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user?.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const supabase = getSupabase();
-
-    // Check if plot has deceased records before deleting
-    const { data: deceased } = await supabase
-      .from('deceased_records')
-      .select('id')
-      .eq('plot_id', id)
-      .limit(1);
-
-    if (deceased && deceased.length > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete a plot that has associated deceased records. Please move or remove the records first.' },
-        { status: 400 }
-      );
-    }
-
-    // Fetch plot info for audit log before deletion
-    const { data: plotInfo } = await supabase
-      .from('plots')
-      .select('plot_number, section, status')
-      .eq('id', id)
-      .single();
-
-    const { error } = await supabase
-      .from('plots')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-
-    // Write audit log
-    const ctx = auditContextFromSession(session);
-    await writeAuditLog({
-      table_name: 'plots',
-      record_id: id,
-      action: 'DELETE',
-      old_values: plotInfo as Record<string, unknown>,
-      summary: `Plot ${plotInfo?.plot_number || id} deleted`,
-      changed_by_user_id: ctx.userId,
-      changed_by_name: ctx.userName,
-      changed_by_email: ctx.userEmail,
-      changed_by_role: ctx.userRole,
-    });
-
-    return NextResponse.json({ message: 'Plot deleted successfully' });
-  } catch (error: any) {
-    console.error('Error deleting plot:', error);
-    return NextResponse.json({ error: error.message || 'Failed to delete plot' }, { status: 500 });
-  }
+// DELETE is intentionally disabled — plot locations are permanent.
+// Only the data (deceased records, owner info) can be moved or edited.
+export async function DELETE() {
+  return NextResponse.json(
+    { error: 'Plot locations cannot be deleted. Use the Move to Available Plot feature to relocate data.' },
+    { status: 405 }
+  );
 }

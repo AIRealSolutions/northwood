@@ -39,9 +39,7 @@ export default function AdminPlotsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -87,22 +85,6 @@ export default function AdminPlotsPage() {
   const handleSearch = () => {
     setSearchQuery(searchInput);
     setCurrentPage(1);
-  };
-
-  const handleDeletePlot = async (plotId: string) => {
-    setDeleteLoading(true);
-    setDeleteError('');
-    try {
-      const res = await fetch(`/api/admin/plots/${plotId}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
-      setDeleteConfirm(null);
-      fetchPlots();
-    } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete plot');
-    } finally {
-      setDeleteLoading(false);
-    }
   };
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -238,39 +220,6 @@ export default function AdminPlotsPage() {
           </div>
         </div>
 
-        {/* Delete Confirmation Modal */}
-        {deleteConfirm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Delete</h3>
-              <p className="text-gray-600 mb-4">
-                Are you sure you want to delete this plot? This action cannot be undone.
-              </p>
-              {deleteError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
-                  {deleteError}
-                </div>
-              )}
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => { setDeleteConfirm(null); setDeleteError(''); }}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                  disabled={deleteLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeletePlot(deleteConfirm)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                  disabled={deleteLoading}
-                >
-                  {deleteLoading ? 'Deleting...' : 'Delete Plot'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Plots Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {loading ? (
@@ -349,12 +298,7 @@ export default function AdminPlotsPage() {
                             >
                               Edit
                             </Link>
-                            <button
-                              onClick={() => { setDeleteConfirm(plot.id); setDeleteError(''); }}
-                              className="text-red-600 hover:text-red-800 font-medium"
-                            >
-                              Delete
-                            </button>
+
                           </div>
                         </td>
                       </tr>
