@@ -15,20 +15,10 @@ interface Connection {
   deceased_records?: { first_name: string; last_name: string } | null;
 }
 
-interface Submission {
-  id: string;
-  subject?: string;
-  description?: string;
-  status: string;
-  created_at: string;
-  request_type?: string;
-}
-
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,26 +27,13 @@ export default function DashboardPage() {
       return;
     }
     if (status === 'authenticated') {
-      // Admins and committee members go to their respective back offices
-      const role = session?.user?.role;
-      if (role === 'admin' || role === 'superintendent') {
-        router.push('/admin');
-        return;
-      }
-      if (role === 'cemetery_committee') {
-        router.push('/admin/committee');
-        return;
-      }
-      // Members get the member dashboard
       loadDashboardData();
     }
   }, [status, session]);
 
   const loadDashboardData = async () => {
     try {
-      const [connRes] = await Promise.all([
-        fetch('/api/connections?mine=true'),
-      ]);
+      const connRes = await fetch('/api/connections?mine=true');
       const connData = await connRes.json();
       setConnections(connData.connections || []);
     } catch {
@@ -80,6 +57,11 @@ export default function DashboardPage() {
   if (!session) return null;
 
   const user = session.user;
+  const role = user?.role;
+  const isAdmin = role === 'admin' || role === 'superintendent';
+  const isCommittee = role === 'cemetery_committee';
+  const isAdminOrCommittee = isAdmin || isCommittee;
+
   const pendingConnections = connections.filter(c => c.status === 'pending');
   const approvedConnections = connections.filter(c => c.status === 'approved');
 
@@ -88,6 +70,18 @@ export default function DashboardPage() {
     if (s === 'rejected') return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
     return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
   };
+
+  const roleLabel = isAdmin
+    ? 'Administrator'
+    : isCommittee
+    ? 'Committee Member'
+    : 'Member';
+
+  const roleBadgeColor = isAdmin
+    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+    : isCommittee
+    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -114,10 +108,17 @@ export default function DashboardPage() {
       <main className="max-w-6xl mx-auto px-4 py-8">
         {/* Welcome Banner */}
         <div className="bg-gradient-to-r from-emerald-600 to-green-700 rounded-2xl p-6 mb-8 text-white">
-          <h1 className="text-2xl font-bold mb-1">Member Dashboard</h1>
-          <p className="text-emerald-100 text-sm">
-            Manage your family connections, submissions, and profile.
-          </p>
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">My Dashboard</h1>
+              <p className="text-emerald-100 text-sm">
+                Manage your family connections, submissions, and profile.
+              </p>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold bg-white/20 text-white border border-white/30`}>
+              {roleLabel}
+            </span>
+          </div>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
               href="/cemetery-map"
@@ -140,6 +141,56 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Back Office Access Panel — shown for admin and committee members */}
+        {isAdminOrCommittee && (
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+              Back Office Access
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-4 p-5 bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-2xl hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-all group"
+                >
+                  <span className="text-3xl">⚙️</span>
+                  <div>
+                    <p className="font-bold text-purple-900 dark:text-purple-100">Admin Dashboard</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-300 mt-0.5">Plots, users, settings</p>
+                  </div>
+                  <span className="ml-auto text-purple-400 group-hover:translate-x-1 transition-transform">→</span>
+                </Link>
+              )}
+              {isAdminOrCommittee && (
+                <Link
+                  href="/admin/committee"
+                  className="flex items-center gap-4 p-5 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-700 rounded-2xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all group"
+                >
+                  <span className="text-3xl">🏛️</span>
+                  <div>
+                    <p className="font-bold text-blue-900 dark:text-blue-100">Committee Back Office</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">Meetings, agendas, goals</p>
+                  </div>
+                  <span className="ml-auto text-blue-400 group-hover:translate-x-1 transition-transform">→</span>
+                </Link>
+              )}
+              {isAdminOrCommittee && (
+                <Link
+                  href="/admin/connections"
+                  className="flex items-center gap-4 p-5 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-2xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all group"
+                >
+                  <span className="text-3xl">🌳</span>
+                  <div>
+                    <p className="font-bold text-amber-900 dark:text-amber-100">Family Connections</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-300 mt-0.5">Review connection requests</p>
+                  </div>
+                  <span className="ml-auto text-amber-400 group-hover:translate-x-1 transition-transform">→</span>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
@@ -151,21 +202,21 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Pending Review</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-            <p className="text-3xl font-bold text-blue-500">{submissions.length}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Submissions</p>
+            <p className="text-3xl font-bold text-blue-500">{connections.length}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Total Connections</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-            <p className="text-3xl font-bold text-purple-500">
-              {user.role === 'member' ? '👤' : '⭐'}
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 capitalize">{user.role}</p>
+            <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${roleBadgeColor}`}>
+              {roleLabel}
+            </span>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Your Role</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Family Connections */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Approved Connections */}
+            {/* Connections List */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -288,8 +339,8 @@ export default function DashboardPage() {
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-white">{user.name || 'Member'}</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 text-xs rounded-full capitalize">
-                    {user.role}
+                  <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full font-medium ${roleBadgeColor}`}>
+                    {roleLabel}
                   </span>
                 </div>
               </div>

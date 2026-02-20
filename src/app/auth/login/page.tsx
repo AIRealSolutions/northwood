@@ -29,14 +29,8 @@ function LoginFormInner() {
       if (result?.error) {
         setError('Invalid email or password. Please try again.');
       } else if (result?.ok) {
-        const session = await getSession();
-        const role = session?.user?.role;
         if (callbackUrl && !callbackUrl.includes('/auth/')) {
           router.push(callbackUrl);
-        } else if (role === 'admin' || role === 'superintendent') {
-          router.push('/admin');
-        } else if (role === 'cemetery_committee') {
-          router.push('/admin/committee');
         } else {
           router.push('/dashboard');
         }
