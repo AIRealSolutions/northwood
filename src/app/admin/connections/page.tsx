@@ -1,11 +1,18 @@
 'use client';
-
 export const dynamic = 'force-dynamic';
 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+
+interface User {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  role: string;
+}
 
 interface Connection {
   id: string;
@@ -14,19 +21,30 @@ interface Connection {
   status: string;
   created_at: string;
   review_notes: string | null;
-  users?: { first_name: string | null; last_name: string | null; email: string } | null;
-  plots?: { plot_number: string; section: string } | null;
-  deceased_records?: { first_name: string; last_name: string } | null;
+  user_id: string;
+  plot_id: string;
+  deceased_id: string | null;
+  user?: User | null;
+  plots?: { id: string; plot_number: string; section: string } | null;
+  deceased_records?: { id: string; first_name: string; last_name: string; birth_date?: string; death_date?: string } | null;
 }
+
+const STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
+  approved: 'bg-green-100 text-green-800 border border-green-200',
+  rejected: 'bg-red-100 text-red-800 border border-red-200',
+};
 
 export default function AdminConnectionsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [actionError, setActionError] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -39,15 +57,18 @@ export default function AdminConnectionsPage() {
       }
       loadConnections();
     }
-  }, [status, session]);
+  }, [status, session, filter]);
 
   const loadConnections = async () => {
+    setLoading(true);
+    setFetchError('');
     try {
-      const res = await fetch('/api/admin/connections');
+      const res = await fetch(`/api/admin/connections?status=${filter}&pageSize=100`);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load connections');
       setConnections(data.connections || []);
-    } catch {
-      // ignore
+    } catch (e: any) {
+      setFetchError(e.message || 'Failed to load connections');
     } finally {
       setLoading(false);
     }
@@ -55,6 +76,7 @@ export default function AdminConnectionsPage() {
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setActionLoading(id + action);
+    setActionError(prev => ({ ...prev, [id]: '' }));
     try {
       const res = await fetch(`/api/connections/${id}`, {
         method: 'PATCH',
@@ -64,19 +86,34 @@ export default function AdminConnectionsPage() {
           review_notes: reviewNotes[id] || null,
         }),
       });
-      if (res.ok) {
-        setConnections(prev =>
-          prev.map(c => c.id === id ? { ...c, status: action === 'approve' ? 'approved' : 'rejected' } : c)
-        );
-      }
-    } catch {
-      // ignore
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Action failed');
+      // Remove from pending list after action
+      setConnections(prev =>
+        filter === 'all'
+          ? prev.map(c => c.id === id ? { ...c, status: action === 'approve' ? 'approved' : 'rejected' } : c)
+          : prev.filter(c => c.id !== id)
+      );
+    } catch (e: any) {
+      setActionError(prev => ({ ...prev, [id]: e.message }));
     } finally {
       setActionLoading(null);
     }
   };
 
-  const filtered = filter === 'all' ? connections : connections.filter(c => c.status === filter);
+  const getUserName = (conn: Connection) => {
+    if (conn.user) {
+      const name = `${conn.user.first_name || ''} ${conn.user.last_name || ''}`.trim();
+      return name || conn.user.email;
+    }
+    return 'Unknown User';
+  };
+
+  const getUserInitial = (conn: Connection) => {
+    if (conn.user?.first_name) return conn.user.first_name[0].toUpperCase();
+    if (conn.user?.email) return conn.user.email[0].toUpperCase();
+    return '?';
+  };
 
   const counts = {
     all: connections.length,
@@ -85,20 +122,26 @@ export default function AdminConnectionsPage() {
     rejected: connections.filter(c => c.status === 'rejected').length,
   };
 
+  const filtered = filter === 'all' ? connections : connections.filter(c => c.status === filter);
+
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-700 mx-auto mb-4" />
+          <p className="text-gray-600">Loading connection requests...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/admin" className="text-gray-400 hover:text-gray-600 text-sm">← Admin</Link>
+            <Link href="/admin/committee" className="text-gray-400 hover:text-gray-600 text-sm">← Committee</Link>
             <span className="text-gray-300">|</span>
             <h1 className="text-lg font-bold text-gray-900">🌳 Family Connection Requests</h1>
           </div>
@@ -111,6 +154,14 @@ export default function AdminConnectionsPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* Info Banner */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+          <p className="text-sm text-blue-800">
+            <strong>Peer Approval Enabled:</strong> Any approved family member connected to a plot can also approve new
+            connection requests for that same plot. Admins and committee members can approve any request.
+          </p>
+        </div>
+
         {/* Filter Tabs */}
         <div className="flex gap-2 mb-6 bg-white border border-gray-200 rounded-xl p-1 w-fit">
           {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
@@ -119,7 +170,7 @@ export default function AdminConnectionsPage() {
               onClick={() => setFilter(f)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === f
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-green-700 text-white'
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -133,120 +184,126 @@ export default function AdminConnectionsPage() {
           ))}
         </div>
 
-        {/* Connections Table */}
+        {fetchError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700 text-sm">
+            {fetchError}
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <p className="text-4xl mb-3">✓</p>
-            <p className="text-gray-500">No {filter === 'all' ? '' : filter} connections to review.</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No {filter === 'all' ? '' : filter} requests</h3>
+            <p className="text-gray-500 text-sm">
+              {filter === 'pending'
+                ? 'All connection requests have been reviewed.'
+                : `No ${filter} connection requests found.`}
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
             {filtered.map(conn => (
-              <div key={conn.id} className="bg-white rounded-xl border border-gray-200 p-5">
+              <div key={conn.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1">
-                    <div className="text-3xl">🪦</div>
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-sm font-bold text-green-700 flex-shrink-0">
+                      {getUserInitial(conn)}
+                    </div>
                     <div className="flex-1">
-                      {/* Member info */}
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm font-bold text-emerald-700">
-                          {(conn.users?.first_name || conn.users?.email || '?')[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 text-sm">
-                            {conn.users?.first_name && conn.users?.last_name
-                              ? `${conn.users.first_name} ${conn.users.last_name}`
-                              : conn.users?.email || 'Unknown member'}
-                          </p>
-                          <p className="text-xs text-gray-400">{conn.users?.email}</p>
-                        </div>
-                        <span className="text-gray-300 text-sm">claims to be</span>
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium">
-                          {conn.relationship}
-                        </span>
-                        <span className="text-gray-300 text-sm">of</span>
+                      {/* Requester info */}
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <p className="font-semibold text-gray-900 text-sm">{getUserName(conn)}</p>
+                        <span className="text-gray-400 text-xs">{conn.user?.email || ''}</span>
+                        {conn.user?.role && (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full capitalize">
+                            {conn.user.role}
+                          </span>
+                        )}
                       </div>
 
-                      {/* Occupant/Plot info */}
-                      <div className="ml-11">
-                        <p className="font-semibold text-gray-900">
+                      {/* Connection claim */}
+                      <div className="flex items-center gap-2 flex-wrap mb-3">
+                        <span className="text-sm text-gray-500">Claims to be</span>
+                        <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium">
+                          {conn.relationship}
+                        </span>
+                        <span className="text-sm text-gray-500">of</span>
+                        <span className="font-semibold text-gray-900 text-sm">
                           {conn.deceased_records
                             ? `${conn.deceased_records.first_name} ${conn.deceased_records.last_name}`
-                            : conn.plots?.plot_number
-                              ? `Plot ${conn.plots.plot_number}`
-                              : 'Unknown'}
-                        </p>
-                        {conn.plots && (
-                          <p className="text-xs text-gray-500">
-                            Plot {conn.plots.plot_number} · Section {conn.plots.section}
-                            {' · '}
-                            <Link href={`/plot/${conn.plots.plot_number}`} className="text-emerald-600 hover:underline" target="_blank">
-                              View plot →
-                            </Link>
-                          </p>
-                        )}
-                        {conn.notes && (
-                          <p className="mt-1 text-sm text-gray-500 italic">&quot;{conn.notes}&quot;</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">
-                          Submitted {new Date(conn.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                        </p>
+                            : 'General plot connection'}
+                        </span>
                       </div>
+
+                      {/* Plot info */}
+                      {conn.plots && (
+                        <p className="text-xs text-gray-500 mb-2">
+                          Plot <strong>{conn.plots.plot_number}</strong> · Section {conn.plots.section}
+                          {' · '}
+                          <Link href={`/plot/${conn.plot_id}`} className="text-green-700 hover:underline" target="_blank">
+                            View plot →
+                          </Link>
+                        </p>
+                      )}
+
+                      {conn.notes && (
+                        <p className="text-sm text-gray-500 italic mb-2">&quot;{conn.notes}&quot;</p>
+                      )}
+
+                      <p className="text-xs text-gray-400">
+                        Submitted {new Date(conn.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </p>
+
+                      {actionError[conn.id] && (
+                        <p className="mt-2 text-sm text-red-600">{actionError[conn.id]}</p>
+                      )}
+
+                      {/* Review notes (for reviewed connections) */}
+                      {conn.review_notes && conn.status !== 'pending' && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-gray-600"><strong>Review note:</strong> {conn.review_notes}</p>
+                        </div>
+                      )}
+
+                      {/* Action area for pending */}
+                      {conn.status === 'pending' && (
+                        <div className="mt-4 pt-4 border-t border-gray-100">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <input
+                              type="text"
+                              placeholder="Optional review note..."
+                              value={reviewNotes[conn.id] || ''}
+                              onChange={e => setReviewNotes(prev => ({ ...prev, [conn.id]: e.target.value }))}
+                              className="flex-1 min-w-48 px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+                            <button
+                              onClick={() => handleAction(conn.id, 'approve')}
+                              disabled={actionLoading === conn.id + 'approve'}
+                              className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                              {actionLoading === conn.id + 'approve' ? '...' : '✓ Approve'}
+                            </button>
+                            <button
+                              onClick={() => handleAction(conn.id, 'reject')}
+                              disabled={actionLoading === conn.id + 'reject'}
+                              className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                              {actionLoading === conn.id + 'reject' ? '...' : '✗ Reject'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Status badge */}
                   <div className="flex-shrink-0">
-                    {conn.status === 'pending' ? (
-                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 border border-yellow-200 rounded-full text-xs font-medium">
-                        ⏳ Pending
-                      </span>
-                    ) : conn.status === 'approved' ? (
-                      <span className="px-3 py-1 bg-green-100 text-green-800 border border-green-200 rounded-full text-xs font-medium">
-                        ✓ Approved
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 bg-red-100 text-red-800 border border-red-200 rounded-full text-xs font-medium">
-                        ✗ Rejected
-                      </span>
-                    )}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[conn.status] || 'bg-gray-100 text-gray-700'}`}>
+                      {conn.status === 'pending' ? '⏳ ' : conn.status === 'approved' ? '✓ ' : '✗ '}
+                      {conn.status}
+                    </span>
                   </div>
                 </div>
-
-                {/* Action area for pending */}
-                {conn.status === 'pending' && (
-                  <div className="mt-4 ml-11 pt-4 border-t border-gray-100">
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="text"
-                        placeholder="Optional review note (shown to member if rejected)..."
-                        value={reviewNotes[conn.id] || ''}
-                        onChange={e => setReviewNotes(prev => ({ ...prev, [conn.id]: e.target.value }))}
-                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                      <button
-                        onClick={() => handleAction(conn.id, 'approve')}
-                        disabled={actionLoading === conn.id + 'approve'}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        {actionLoading === conn.id + 'approve' ? '...' : '✓ Approve'}
-                      </button>
-                      <button
-                        onClick={() => handleAction(conn.id, 'reject')}
-                        disabled={actionLoading === conn.id + 'reject'}
-                        className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        {actionLoading === conn.id + 'reject' ? '...' : '✗ Reject'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {conn.review_notes && conn.status !== 'pending' && (
-                  <div className="mt-3 ml-11 p-3 bg-gray-50 rounded-xl">
-                    <p className="text-xs text-gray-600"><strong>Review note:</strong> {conn.review_notes}</p>
-                  </div>
-                )}
               </div>
             ))}
           </div>

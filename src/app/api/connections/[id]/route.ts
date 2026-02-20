@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getSupabase } from '@/lib/supabase';
 
-const ADMIN_ROLES = ['admin', 'cemetery_committee', 'superintendent'];
+const ADMIN_ROLES = ['admin', 'cemetery_committee'];
 
 // DELETE — user removes their own connection request
 export async function DELETE(
@@ -18,7 +18,6 @@ export async function DELETE(
   try {
     const supabase = getSupabase();
 
-    // Verify ownership (unless admin)
     const { data: conn } = await supabase
       .from('plot_connections')
       .select('id, user_id')
@@ -36,20 +35,22 @@ export async function DELETE(
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting connection:', error);
     return NextResponse.json({ error: 'Failed to delete connection' }, { status: 500 });
   }
 }
 
-// PATCH — admin approves or rejects a connection
+// PATCH — approve or reject a connection request
+// Allowed by:
+//   1. Admins / cemetery_committee members (always)
+//   2. Any approved family member connected to the SAME plot (peer approval)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!ADMIN_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await params;
 
@@ -63,24 +64,69 @@ export async function PATCH(
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
+    // Fetch the connection being reviewed
+    const { data: conn, error: connError } = await supabase
+      .from('plot_connections')
+      .select('id, user_id, plot_id, status')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (connError || !conn) {
+      return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
+    }
+
+    // Prevent self-approval
+    if (conn.user_id === session.user.id) {
+      return NextResponse.json({ error: 'You cannot approve your own connection request' }, { status: 403 });
+    }
+
+    const isAdmin = ADMIN_ROLES.includes(session.user.role);
+
+    // Check if current user is an approved family member on the same plot (peer approval)
+    let isPeerApprover = false;
+    if (!isAdmin) {
+      const { data: peerConn } = await supabase
+        .from('plot_connections')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('plot_id', conn.plot_id)
+        .eq('status', 'approved')
+        .maybeSingle();
+
+      isPeerApprover = !!peerConn;
+    }
+
+    if (!isAdmin && !isPeerApprover) {
+      return NextResponse.json({
+        error: 'You must be an admin or an approved family member of this plot to approve connections',
+      }, { status: 403 });
+    }
+
+    // Update the connection — omit reviewed_at and updated_at to avoid timestamp coercion
+    // Supabase will handle updated_at via triggers if configured, otherwise we skip it
+    const { data: updated, error: updateError } = await supabase
       .from('plot_connections')
       .update({
         status,
         review_notes: review_notes?.trim() || null,
         reviewed_by: session.user.id,
-        reviewed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (updateError) {
+      console.error('Connection update error:', updateError);
+      throw updateError;
+    }
 
-    return NextResponse.json({ connection: data });
-  } catch (error) {
+    return NextResponse.json({
+      connection: updated,
+      approval_type: isAdmin ? 'admin' : 'peer_family_member',
+    });
+
+  } catch (error: any) {
     console.error('Error updating connection:', error);
-    return NextResponse.json({ error: 'Failed to update connection' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to update connection' }, { status: 500 });
   }
 }
