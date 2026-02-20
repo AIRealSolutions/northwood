@@ -36,7 +36,7 @@ export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
     section: initialData?.section || '',
     row_number: initialData?.row_number || '',
     plot_position: initialData?.plot_position || '',
-    plot_type: initialData?.plot_type || 'single',
+    plot_type: initialData?.plot_type || 'standard',
     status: initialData?.status || 'available',
     size_width: initialData?.size_width || '',
     size_length: initialData?.size_length || '',
@@ -67,16 +67,27 @@ export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
       const url = mode === 'create' ? '/api/admin/plots' : `/api/admin/plots/${plotId}`;
       const method = mode === 'create' ? 'POST' : 'PUT';
 
+      // In edit mode, only send position fields
+      const body =
+        mode === 'edit'
+          ? {
+              plot_number: formData.plot_number,
+              section: formData.section,
+              row_number: formData.row_number,
+              plot_position: formData.plot_position,
+            }
+          : formData;
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(body),
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
+      if (!res.ok) throw new Error(json.error || 'Failed to save');
 
-      setSuccess(mode === 'create' ? 'Plot created successfully!' : 'Plot updated successfully!');
+      setSuccess(mode === 'create' ? 'Plot created successfully!' : 'Plot position updated successfully!');
       setTimeout(() => {
         if (mode === 'create') {
           router.push(`/admin/plots/${json.data.id}`);
@@ -91,6 +102,129 @@ export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
     }
   };
 
+  // ─── EDIT MODE: position-only form ───────────────────────────────────────────
+  if (mode === 'edit') {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+            ✓ {success}
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-base font-semibold text-gray-900 mb-1">Update Plot Position</h3>
+          <p className="text-sm text-gray-500 mb-5">
+            Only the physical location fields can be changed here. Use this to correct a plot that was
+            entered in the wrong section, row, or position.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* Plot Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Plot Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="plot_number"
+                value={formData.plot_number}
+                onChange={handleChange}
+                required
+                placeholder="e.g. NW-A-001-1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">Official plot identifier</p>
+            </div>
+
+            {/* Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Section <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="section"
+                value={formData.section}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              >
+                <option value="">Select Section</option>
+                {SECTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    Section {s}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Cemetery section (block)</p>
+            </div>
+
+            {/* Row Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Row Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                name="row_number"
+                value={formData.row_number}
+                onChange={handleChange}
+                required
+                min="1"
+                placeholder="e.g. 1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">Row within the section</p>
+            </div>
+
+            {/* Plot Position */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Plot Position <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                name="plot_position"
+                value={formData.plot_position}
+                onChange={handleChange}
+                required
+                min="1"
+                placeholder="e.g. 3"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">Position within the row</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-4">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : 'Update Position'}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  // ─── CREATE MODE: full form ───────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
@@ -104,7 +238,7 @@ export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
         </div>
       )}
 
-      {/* Core Plot Info */}
+      {/* Core Plot Location */}
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-base font-semibold text-gray-900 mb-4">Plot Location</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -327,13 +461,7 @@ export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
           disabled={loading}
           className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium disabled:opacity-50"
         >
-          {loading
-            ? mode === 'create'
-              ? 'Creating...'
-              : 'Saving...'
-            : mode === 'create'
-            ? 'Create Plot'
-            : 'Save Changes'}
+          {loading ? 'Creating...' : 'Create Plot'}
         </button>
       </div>
     </form>

@@ -91,7 +91,7 @@ export default function EditPlotPage() {
               ← Plot {plot.plot_number}
             </Link>
             <span className="text-gray-300">/</span>
-            <h1 className="text-2xl font-bold text-gray-900">Edit Plot</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Update Plot Position</h1>
           </div>
         </div>
       </header>
