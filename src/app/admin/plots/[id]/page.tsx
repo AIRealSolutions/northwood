@@ -154,17 +154,17 @@ export default function AdminPlotDetailPage() {
     }
   };
 
-  // Load available plots in the same section when Move mode is activated
-  const loadAvailablePlots = useCallback(async (section: string) => {
+  // Load available plots in the SAME BLOCK (same section + same row_number) when Move mode is activated
+  const loadAvailablePlots = useCallback(async (section: string, rowNumber: number) => {
     setLoadingAvailable(true);
     setAvailablePlots([]);
     try {
       const res = await fetch(`/api/admin/plots/section/${section}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
-      // Filter to only available plots (exclude current plot)
+      // Filter to only available plots in the SAME ROW (block) — exclude current plot
       const available = (json.plots || []).filter(
-        (p: any) => p.status === 'available' && p.id !== plotId
+        (p: any) => p.status === 'available' && p.id !== plotId && p.row_number === rowNumber
       );
       setAvailablePlots(available);
     } catch {
@@ -180,7 +180,7 @@ export default function AdminPlotDetailPage() {
     setMoveNotes('');
     setMoveError('');
     setMoveSuccess('');
-    if (plot) loadAvailablePlots(plot.section);
+    if (plot) loadAvailablePlots(plot.section, plot.row_number);
   };
 
   const handleCancelMove = () => {
@@ -552,19 +552,19 @@ export default function AdminPlotDetailPage() {
                 {loadingAvailable ? (
                   <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-600"></div>
-                    Loading available plots in Section {plot.section}...
+                    Loading available plots in Block (Row {plot.row_number}, Section {plot.section})...
                   </div>
                 ) : availablePlots.length === 0 ? (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-6 text-center text-gray-500">
                     <div className="text-3xl mb-2">🔍</div>
-                    <p className="font-medium">No available plots found in Section {plot.section}</p>
-                    <p className="text-xs mt-1">All plots in this section are currently occupied or reserved.</p>
+                    <p className="font-medium">No available plots found in this block (Row {plot.row_number}, Section {plot.section})</p>
+                    <p className="text-xs mt-1">All plots in this block are currently occupied or reserved.</p>
                   </div>
                 ) : (
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-semibold text-gray-700">
-                        Available Plots in Section {plot.section}
+                        Available Plots in Block — Row {plot.row_number}, Section {plot.section}
                         <span className="ml-2 text-xs font-normal text-gray-400">({availablePlots.length} available)</span>
                       </h3>
                       {selectedDest && (
