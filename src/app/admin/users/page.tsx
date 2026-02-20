@@ -17,14 +17,14 @@ interface User {
   last_login?: string;
 }
 
-const ROLES = ['admin', 'cemetery_committee', 'member', 'guest'];
+const ROLES = ['admin', 'cemetery_committee', 'member'];
 const STATUSES = ['active', 'inactive', 'suspended'];
 
 const ROLE_COLORS: Record<string, string> = {
   admin: 'bg-purple-100 text-purple-800',
   cemetery_committee: 'bg-blue-100 text-blue-800',
   member: 'bg-green-100 text-green-800',
-  guest: 'bg-gray-100 text-gray-800',
+
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -388,7 +388,7 @@ function UserModal({ user, onClose, onSave }: UserModalProps) {
                 <option value="member">Member</option>
                 <option value="cemetery_committee">Cemetery Committee</option>
                 <option value="admin">Admin</option>
-                <option value="guest">Guest</option>
+
               </select>
             </div>
             <div>

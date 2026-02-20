@@ -6,7 +6,267 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { plotsAPI, PlotWithDetails, DeceasedRecord } from '@/lib/supabase';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PlotConnection {
+  id: string;
+  relationship: string;
+  deceased_records?: { id: string; first_name: string; last_name: string } | null;
+}
+
+// ─── Connect with Descendants Component ───────────────────────────────────────
+
+function ConnectWithDescendants({
+  plot,
+  deceased,
+}: {
+  plot: PlotWithDetails;
+  deceased: DeceasedRecord[];
+}) {
+  const { data: session } = useSession();
+  const [connections, setConnections] = useState<PlotConnection[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ deceased_id: '', relationship: '', notes: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+  const [loadingConnections, setLoadingConnections] = useState(true);
+
+  // Load existing approved connections for this plot
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/connections?plot_id=${plot.id}`);
+        const data = await res.json();
+        setConnections(data.connections || []);
+      } catch {
+        // ignore
+      } finally {
+        setLoadingConnections(false);
+      }
+    };
+    if (plot?.id) load();
+  }, [plot?.id]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.relationship.trim()) {
+      setError('Please describe your relationship to the occupant(s).');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch('/api/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plot_id: plot.id,
+          deceased_id: form.deceased_id || null,
+          relationship: form.relationship,
+          notes: form.notes,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Submission failed');
+      }
+      setSubmitted(true);
+      setShowForm(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Submission failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Count of approved connections
+  const connectionCount = connections.length;
+
+  return (
+    <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700 rounded-xl p-6 mt-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-green-900 dark:text-green-100 flex items-center gap-2">
+            <span className="text-2xl">🌳</span>
+            Connect with Descendants
+          </h2>
+          <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+            Are you a family member or descendant of someone interred in this plot?
+            Register your connection to be part of the Northwood family network.
+          </p>
+        </div>
+        {connectionCount > 0 && (
+          <div className="flex-shrink-0 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 text-sm font-bold px-3 py-1.5 rounded-full">
+            {connectionCount} {connectionCount === 1 ? 'family' : 'families'} connected
+          </div>
+        )}
+      </div>
+
+      {/* Existing connections summary */}
+      {!loadingConnections && connectionCount > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {connections.map(c => (
+            <span
+              key={c.id}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-green-900 border border-green-200 dark:border-green-600 rounded-full text-xs text-green-800 dark:text-green-200"
+            >
+              <span>👤</span>
+              {c.relationship}
+              {c.deceased_records && (
+                <span className="text-green-500 dark:text-green-400">
+                  {' '}of {c.deceased_records.first_name} {c.deceased_records.last_name}
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Already submitted */}
+      {submitted && (
+        <div className="p-4 bg-green-100 dark:bg-green-800 border border-green-300 dark:border-green-600 rounded-xl text-green-800 dark:text-green-100 text-sm">
+          <p className="font-semibold mb-1">✓ Connection request submitted!</p>
+          <p>
+            Thank you for registering your family connection. The cemetery committee will review your
+            request and approve it shortly. You can view the status in{' '}
+            <Link href="/my-connections" className="underline font-medium">My Connections</Link>.
+          </p>
+        </div>
+      )}
+
+      {/* Not logged in */}
+      {!session && !submitted && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-green-200 dark:border-green-700 p-5">
+          <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+            <strong>Register a free account</strong> to connect your family to this plot and be part of
+            the Northwood Cemetery family network. Once approved, your connection will be visible to
+            other family members.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link
+              href={`/auth/register?callbackUrl=/plot/${plot.id}`}
+              className="flex-1 text-center px-5 py-2.5 bg-green-700 hover:bg-green-800 text-white font-semibold rounded-xl text-sm transition-colors"
+            >
+              Create Free Account
+            </Link>
+            <Link
+              href={`/auth/login?callbackUrl=/plot/${plot.id}`}
+              className="flex-1 text-center px-5 py-2.5 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200 font-semibold rounded-xl text-sm transition-colors"
+            >
+              Sign In
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Logged in — show form or button */}
+      {session && !submitted && (
+        <>
+          {!showForm ? (
+            <button
+              onClick={() => setShowForm(true)}
+              className="w-full py-2.5 px-5 bg-green-700 hover:bg-green-800 text-white font-semibold rounded-xl text-sm transition-colors"
+            >
+              + Connect My Family to This Plot
+            </button>
+          ) : (
+            <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-xl border border-green-200 dark:border-green-700 p-5 space-y-4">
+              <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Register Your Family Connection</h3>
+
+              {error && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-red-700 dark:text-red-300 text-sm">
+                  {error}
+                </div>
+              )}
+
+              {/* Select specific occupant (optional) */}
+              {deceased.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Connected to (optional)
+                    <span className="text-gray-400 font-normal ml-1">— leave blank to connect to the entire plot</span>
+                  </label>
+                  <select
+                    value={form.deceased_id}
+                    onChange={e => setForm(f => ({ ...f, deceased_id: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="">All occupants in this plot</option>
+                    {deceased.map((d: DeceasedRecord) => {
+                      const name = [d.first_name, d.middle_name, d.last_name].filter(Boolean).join(' ');
+                      return (
+                        <option key={d.id} value={d.id}>{name}</option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
+              {/* Relationship */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Your Relationship *
+                </label>
+                <input
+                  type="text"
+                  value={form.relationship}
+                  onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))}
+                  required
+                  placeholder="e.g. Grandson, Great-granddaughter, Niece, Descendant..."
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Additional Notes
+                  <span className="text-gray-400 font-normal ml-1">(optional)</span>
+                </label>
+                <textarea
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={3}
+                  placeholder="Any additional context about your family connection..."
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Your connection will be reviewed by the cemetery committee before it appears publicly.
+                Your personal contact information will not be shared.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-2.5 bg-green-700 hover:bg-green-800 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
+                >
+                  {submitting ? 'Submitting...' : 'Submit Connection Request'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setError(''); }}
+                  className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-xl text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function PlotDetailsPage() {
   const params = useParams();
@@ -61,10 +321,6 @@ export default function PlotDetailsPage() {
     return age;
   };
 
-  // Map section letters to road names (sections are BETWEEN roads)
-  // Orientation: Mitchell (N), Sweet Bay (S), Azalea (W), Fodale (E)
-  // Rows 1-36 start at Sweet Bay (S), ascending north
-  // Rows 37+ continue from north, descending back south
   const getSectionRoads = (section: string): { west: string; east: string } => {
     const roadMap: Record<string, { west: string; east: string }> = {
       'A': { west: 'Azalea (W Border)', east: 'Beech' },
@@ -79,7 +335,6 @@ export default function PlotDetailsPage() {
     return roadMap[section.toUpperCase()] || { west: section, east: section };
   };
 
-  // Get block info based on row number
   const getBlockInfo = (rowNumber: number): string => {
     if (rowNumber <= 36) {
       return 'Block 1 (South section, rows ascending from Sweet Bay)';
@@ -215,7 +470,7 @@ export default function PlotDetailsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Primary Section: Deceased Records */}
+          {/* Primary Section: Deceased Records + Connect with Descendants */}
           <div className="lg:col-span-2">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
@@ -306,7 +561,7 @@ export default function PlotDetailsPage() {
                         {person.epitaph && (
                           <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg border-l-4 border-gray-400 dark:border-gray-500">
                             <p className="italic text-gray-700 dark:text-gray-300 text-center">
-                              "{person.epitaph}"
+                              &ldquo;{person.epitaph}&rdquo;
                             </p>
                           </div>
                         )}
@@ -334,6 +589,11 @@ export default function PlotDetailsPage() {
                 </div>
               )}
             </div>
+
+            {/* Connect with Descendants — only for occupied plots */}
+            {hasDeceased && (
+              <ConnectWithDescendants plot={plot} deceased={deceased} />
+            )}
           </div>
 
           {/* Secondary Section: Owner & Plot Info */}
@@ -411,7 +671,7 @@ export default function PlotDetailsPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-500 dark:text-gray-400">Dimensions</span>
                     <span className="font-medium text-gray-900 dark:text-white">
-                      {plot.size_width}' × {plot.size_length}'
+                      {plot.size_width}&apos; × {plot.size_length}&apos;
                     </span>
                   </div>
                 )}
@@ -460,6 +720,12 @@ export default function PlotDetailsPage() {
                   className="block w-full text-center bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 px-4 py-2 rounded-lg transition-colors font-medium"
                 >
                   ✏️ Submit a Correction
+                </Link>
+                <Link
+                  href="/my-connections"
+                  className="block w-full text-center bg-green-50 hover:bg-green-100 border border-green-300 text-green-800 px-4 py-2 rounded-lg transition-colors font-medium"
+                >
+                  🌳 My Family Connections
                 </Link>
               </div>
             </div>

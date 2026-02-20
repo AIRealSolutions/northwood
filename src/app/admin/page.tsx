@@ -157,10 +157,10 @@ export default function AdminDashboard() {
               icon="👥"
             />
             <ActionButton
-              href="/admin/family-requests"
-              title="Family Requests"
-              description="Verify family connections"
-              icon="🔗"
+              href="/admin/connections"
+              title="Family Connections"
+              description="Review and approve descendant connection requests"
+              icon="🌳"
             />
             <ActionButton
               href="/admin/committee"

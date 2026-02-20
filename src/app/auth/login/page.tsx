@@ -1,12 +1,16 @@
 'use client';
-
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { signIn, getSession } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Suspense } from 'react';
 
-export default function LoginPage() {
+function LoginFormInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '';
+  const registered = searchParams.get('registered') === 'true';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,22 +20,30 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const result = await signIn('credentials', {
         email,
         password,
         redirect: false,
       });
-
       if (result?.error) {
-        setError(result.error);
+        setError('Invalid email or password. Please try again.');
       } else if (result?.ok) {
-        router.push('/dashboard');
+        const session = await getSession();
+        const role = session?.user?.role;
+        if (callbackUrl && !callbackUrl.includes('/auth/')) {
+          router.push(callbackUrl);
+        } else if (role === 'admin' || role === 'superintendent') {
+          router.push('/admin');
+        } else if (role === 'cemetery_committee') {
+          router.push('/admin/committee');
+        } else {
+          router.push('/dashboard');
+        }
         router.refresh();
       }
-    } catch (err) {
-      setError('An error occurred during login');
+    } catch {
+      setError('An error occurred during login. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -138,5 +150,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      </div>
+    }>
+      <LoginFormInner />
+    </Suspense>
   );
 }
