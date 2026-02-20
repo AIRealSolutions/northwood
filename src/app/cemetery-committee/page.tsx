@@ -1,13 +1,31 @@
 'use client';
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface CommitteeMember {
+  id: string;
+  full_name: string;
+  title?: string;
+  bio?: string;
+  photo_url?: string;
+  email?: string;
+  phone?: string;
+  term_start?: string;
+  term_end?: string;
+}
 
 interface Meeting {
   id: string;
   title: string;
   meeting_date: string;
   start_time?: string;
+  end_time?: string;
   location?: string;
   description?: string;
   agenda_published: boolean;
@@ -21,439 +39,897 @@ interface AgendaItem {
   description?: string;
 }
 
-function CemeteryCommitteeContent() {
-  const searchParams = useSearchParams();
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
-  const [agendaItems, setAgendaItems] = useState<AgendaItem[]>([]);
-  const [minutes, setMinutes] = useState<string>('');
-  const [loadingMeeting, setLoadingMeeting] = useState(false);
-  const [activeSection, setActiveSection] = useState<'meetings' | 'submit-agenda' | 'change-request'>('meetings');
-  const [agendaForm, setAgendaForm] = useState({ name: '', email: '', phone: '', subject: '', description: '', preferred_date: '' });
-  const [changeForm, setChangeForm] = useState({ name: '', email: '', phone: '', relationship: '', subject: '', details: '', request_type: 'occupant_details', plot_number: '', occupant_name: '' });
-  const [agendaSubmitted, setAgendaSubmitted] = useState(false);
-  const [changeSubmitted, setChangeSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState('');
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  // Read URL params to pre-fill change request form when arriving from a plot page
-  useEffect(() => {
-    const section = searchParams.get('section');
-    const plot = searchParams.get('plot');
-    const occupant = searchParams.get('occupant');
-    const type = searchParams.get('type');
+function formatDate(d: string) {
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+}
 
-    if (section === 'change-request') {
-      setActiveSection('change-request');
-    } else if (section === 'submit-agenda') {
-      setActiveSection('submit-agenda');
+function formatTime(t?: string) {
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  const hour = parseInt(h);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+  return `${displayHour}:${m} ${ampm}`;
+}
+
+// ─── Section: Hero ────────────────────────────────────────────────────────────
+
+function Hero({ onNav }: { onNav: (s: string) => void }) {
+  return (
+    <section className="bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 text-white py-20 px-4">
+      <div className="max-w-4xl mx-auto text-center">
+        <div className="inline-flex items-center gap-2 bg-green-700/50 border border-green-600 rounded-full px-4 py-1.5 text-sm text-green-200 mb-6">
+          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+          Northwood Cemetery Committee
+        </div>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
+          Preserving History,<br />Honoring Lives
+        </h1>
+        <p className="text-green-200 text-lg max-w-2xl mx-auto mb-10">
+          The Cemetery Committee oversees the care and stewardship of Northwood Cemetery in Southport, NC.
+          We welcome community involvement and public participation.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onClick={() => onNav('meetings')}
+            className="px-6 py-3 bg-white text-green-900 font-semibold rounded-xl hover:bg-green-50 transition-colors"
+          >
+            Meeting Schedule
+          </button>
+          <button
+            onClick={() => onNav('submit-agenda')}
+            className="px-6 py-3 bg-green-700 border border-green-500 text-white font-semibold rounded-xl hover:bg-green-600 transition-colors"
+          >
+            Submit an Agenda Item
+          </button>
+          <button
+            onClick={() => onNav('change-request')}
+            className="px-6 py-3 bg-amber-600 text-white font-semibold rounded-xl hover:bg-amber-700 transition-colors"
+          >
+            Submit a Correction
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Section: Committee Members ───────────────────────────────────────────────
+
+function MembersSection({ members }: { members: CommitteeMember[] }) {
+  return (
+    <section id="members" className="py-16 px-4 bg-white">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-gray-900 mb-3">Meet the Committee</h2>
+          <p className="text-gray-500 max-w-xl mx-auto">
+            Our volunteer committee members are dedicated community members committed to the preservation and care of Northwood Cemetery.
+          </p>
+        </div>
+
+        {members.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            <p>Committee member information coming soon.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {members.map(m => (
+              <div key={m.id} className="bg-gray-50 rounded-2xl p-6 border border-gray-100 hover:shadow-md transition-shadow">
+                {/* Avatar */}
+                <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4 overflow-hidden border-4 border-white shadow">
+                  {m.photo_url ? (
+                    <img src={m.photo_url} alt={m.full_name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-3xl font-bold text-green-700">{m.full_name.charAt(0)}</span>
+                  )}
+                </div>
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-gray-900">{m.full_name}</h3>
+                  {m.title && (
+                    <span className="inline-block mt-1 px-3 py-0.5 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                      {m.title}
+                    </span>
+                  )}
+                  {(m.term_start || m.term_end) && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      Term: {m.term_start ? new Date(m.term_start).getFullYear() : '?'}
+                      {' – '}
+                      {m.term_end ? new Date(m.term_end).getFullYear() : 'Present'}
+                    </p>
+                  )}
+                  {m.bio && (
+                    <p className="text-sm text-gray-600 mt-3 leading-relaxed">{m.bio}</p>
+                  )}
+                  {(m.email || m.phone) && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col gap-1 text-xs text-gray-500">
+                      {m.email && (
+                        <a href={`mailto:${m.email}`} className="hover:text-green-700 transition-colors">
+                          ✉ {m.email}
+                        </a>
+                      )}
+                      {m.phone && (
+                        <a href={`tel:${m.phone}`} className="hover:text-green-700 transition-colors">
+                          📞 {m.phone}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── Section: Meeting Schedule ────────────────────────────────────────────────
+
+function MeetingsSection({ upcoming, recent }: { upcoming: Meeting[]; recent: Meeting[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [meetingDetail, setMeetingDetail] = useState<{ agendaItems: AgendaItem[]; minutesContent: string } | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const toggleMeeting = async (id: string) => {
+    if (expandedId === id) {
+      setExpandedId(null);
+      setMeetingDetail(null);
+      return;
     }
-
-    if (plot || occupant || type) {
-      setChangeForm(f => ({
-        ...f,
-        plot_number: plot || f.plot_number,
-        occupant_name: occupant || f.occupant_name,
-        request_type: type || f.request_type,
-        subject: plot && occupant
-          ? `Correction for ${occupant} — Plot ${plot}`
-          : plot
-          ? `Correction for Plot ${plot}`
-          : f.subject,
-      }));
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    const fetchMeetings = async () => {
-      try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        const headers = { 'apikey': supabaseKey || '', 'Authorization': `Bearer ${supabaseKey}` };
-        const res = await fetch(`${supabaseUrl}/rest/v1/committee_meetings?order=meeting_date.desc&limit=20`, { headers });
-        const data = await res.json();
-        setMeetings(Array.isArray(data) ? data : []);
-      } catch { /* ignore */ }
-    };
-    fetchMeetings();
-  }, []);
-
-  const loadMeetingDetails = async (meeting: Meeting) => {
-    setSelectedMeeting(meeting);
-    setLoadingMeeting(true);
+    setExpandedId(id);
+    setLoadingDetail(true);
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      const headers = { 'apikey': supabaseKey || '', 'Authorization': `Bearer ${supabaseKey}` };
-
-      const [agendasRes, minutesRes] = await Promise.all([
-        meeting.agenda_published ? fetch(`${supabaseUrl}/rest/v1/meeting_agendas?meeting_id=eq.${meeting.id}&order=item_number.asc`, { headers }) : Promise.resolve(null),
-        meeting.minutes_published ? fetch(`${supabaseUrl}/rest/v1/meeting_minutes?meeting_id=eq.${meeting.id}`, { headers }) : Promise.resolve(null),
-      ]);
-
-      if (agendasRes) setAgendaItems(await agendasRes.json());
-      else setAgendaItems([]);
-
-      if (minutesRes) {
-        const mins = await minutesRes.json();
-        setMinutes(mins[0]?.content || '');
-      } else setMinutes('');
-    } catch { /* ignore */ }
-    finally { setLoadingMeeting(false); }
+      const res = await fetch(`/api/public/meetings/${id}`);
+      const data = await res.json();
+      setMeetingDetail({ agendaItems: data.agendaItems || [], minutesContent: data.minutesContent || '' });
+    } catch {
+      setMeetingDetail({ agendaItems: [], minutesContent: '' });
+    } finally {
+      setLoadingDetail(false);
+    }
   };
 
-  const handleAgendaSubmit = async (e: React.FormEvent) => {
+  const MeetingCard = ({ m, isPast }: { m: Meeting; isPast: boolean }) => (
+    <div className={`rounded-xl border ${isPast ? 'border-gray-200 bg-gray-50' : 'border-green-200 bg-white'} overflow-hidden`}>
+      <button
+        onClick={() => toggleMeeting(m.id)}
+        className="w-full text-left p-5 hover:bg-green-50/50 transition-colors"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex gap-4 items-start">
+            {/* Date badge */}
+            <div className={`flex-shrink-0 w-14 text-center rounded-xl py-2 ${isPast ? 'bg-gray-200 text-gray-600' : 'bg-green-700 text-white'}`}>
+              <div className="text-xs font-medium uppercase">
+                {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
+              </div>
+              <div className="text-2xl font-bold leading-none">
+                {new Date(m.meeting_date + 'T12:00:00').getDate()}
+              </div>
+              <div className="text-xs">
+                {new Date(m.meeting_date + 'T12:00:00').getFullYear()}
+              </div>
+            </div>
+            {/* Details */}
+            <div>
+              <h3 className="font-semibold text-gray-900">{m.title}</h3>
+              <div className="text-sm text-gray-500 mt-1 space-y-0.5">
+                {(m.start_time || m.end_time) && (
+                  <p>🕐 {formatTime(m.start_time)}{m.end_time ? ` – ${formatTime(m.end_time)}` : ''}</p>
+                )}
+                {m.location && <p>📍 {m.location}</p>}
+                {m.description && <p className="text-gray-400 text-xs mt-1">{m.description}</p>}
+              </div>
+              <div className="flex gap-2 mt-2">
+                {m.agenda_published && (
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">Agenda Available</span>
+                )}
+                {m.minutes_published && (
+                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">Minutes Published</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <svg
+            className={`w-5 h-5 text-gray-400 flex-shrink-0 mt-1 transition-transform ${expandedId === m.id ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {expandedId === m.id && (
+        <div className="border-t border-gray-100 px-5 pb-5 pt-4">
+          {loadingDetail ? (
+            <div className="text-sm text-gray-400 py-2">Loading details...</div>
+          ) : meetingDetail ? (
+            <div className="space-y-4">
+              {meetingDetail.agendaItems.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Agenda</h4>
+                  <ol className="space-y-1.5">
+                    {meetingDetail.agendaItems.map(item => (
+                      <li key={item.id} className="flex gap-3 text-sm">
+                        <span className="w-5 h-5 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                          {item.item_number}
+                        </span>
+                        <div>
+                          <span className="text-gray-800 font-medium">{item.title}</span>
+                          {item.description && <p className="text-gray-500 text-xs mt-0.5">{item.description}</p>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {meetingDetail.minutesContent && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Meeting Minutes</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-gray-200">
+                    {meetingDetail.minutesContent}
+                  </div>
+                </div>
+              )}
+              {meetingDetail.agendaItems.length === 0 && !meetingDetail.minutesContent && (
+                <p className="text-sm text-gray-400">No agenda or minutes have been published for this meeting yet.</p>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <section id="meetings" className="py-16 px-4 bg-gray-50">
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-gray-900 mb-3">Meeting Schedule</h2>
+          <p className="text-gray-500">
+            Committee meetings are open to the public. Click any meeting to view the agenda and published minutes.
+          </p>
+        </div>
+
+        {upcoming.length > 0 && (
+          <div className="mb-10">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">Upcoming Meetings</h3>
+            <div className="space-y-3">
+              {upcoming.map(m => <MeetingCard key={m.id} m={m} isPast={false} />)}
+            </div>
+          </div>
+        )}
+
+        {upcoming.length === 0 && (
+          <div className="text-center py-8 bg-white rounded-xl border border-gray-200 mb-10">
+            <p className="text-gray-400">No upcoming meetings scheduled at this time.</p>
+            <p className="text-sm text-gray-400 mt-1">Check back soon or contact the committee.</p>
+          </div>
+        )}
+
+        {recent.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">Recent Meetings</h3>
+            <div className="space-y-3">
+              {recent.map(m => <MeetingCard key={m.id} m={m} isPast={true} />)}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── Auth Gate ────────────────────────────────────────────────────────────────
+
+function AuthGate({ action, children }: { action: string; children: React.ReactNode }) {
+  const { data: session, status } = useSession();
+
+  if (status === 'loading') {
+    return (
+      <div className="py-12 text-center text-gray-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+        <div className="text-4xl mb-4">🔒</div>
+        <h3 className="text-lg font-bold text-gray-900 mb-2">Sign In Required</h3>
+        <p className="text-gray-600 text-sm mb-6 max-w-sm mx-auto">
+          You must be a registered member to {action}. Registration is free and only takes a moment.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            href={`/auth/login?callbackUrl=/cemetery-committee`}
+            className="px-6 py-2.5 bg-green-700 hover:bg-green-800 text-white rounded-xl font-semibold text-sm transition-colors"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/auth/register"
+            className="px-6 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-semibold text-sm transition-colors"
+          >
+            Create Account
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+// ─── Section: Submit Agenda Item ──────────────────────────────────────────────
+
+function AgendaSubmissionForm() {
+  const { data: session } = useSession();
+  const [form, setForm] = useState({
+    name: '', email: '', phone: '',
+    subject: '', description: '', preferred_date: '',
+  });
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
+  // Pre-fill contact details from user profile
+  useEffect(() => {
+    if (session?.user?.id && !profileLoaded) {
+      fetch('/api/user/profile')
+        .then(r => r.json())
+        .then(data => {
+          if (data.name || data.email) {
+            setForm(f => ({
+              ...f,
+              name: data.name || f.name,
+              email: data.email || f.email,
+              phone: data.phone || f.phone,
+            }));
+            setProfileLoaded(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session, profileLoaded]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.subject.trim() || !form.description.trim()) {
+      setError('Please fill in the subject and description.');
+      return;
+    }
     setSubmitting(true);
-    setFormError('');
+    setError('');
     try {
       const res = await fetch('/api/public/agenda-submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          submitted_by_name: agendaForm.name,
-          submitted_by_email: agendaForm.email,
-          submitted_by_phone: agendaForm.phone,
-          subject: agendaForm.subject,
-          description: agendaForm.description,
-          preferred_meeting_date: agendaForm.preferred_date || undefined,
-        }),
+        body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error('Submission failed');
-      setAgendaSubmitted(true);
-    } catch { setFormError('Failed to submit. Please try again.'); }
-    finally { setSubmitting(false); }
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Submission failed');
+      }
+      setSubmitted(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Submission failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleChangeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setFormError('');
-    try {
-      const res = await fetch('/api/public/change-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request_type: changeForm.request_type,
-          submitted_by_name: changeForm.name,
-          submitted_by_email: changeForm.email,
-          submitted_by_phone: changeForm.phone,
-          relationship_to_deceased: changeForm.relationship,
-          subject: changeForm.subject,
-          details: changeForm.details,
-          requested_changes: { plot_number: changeForm.plot_number, occupant_name: changeForm.occupant_name },
-        }),
-      });
-      if (!res.ok) throw new Error('Submission failed');
-      setChangeSubmitted(true);
-    } catch { setFormError('Failed to submit. Please try again.'); }
-    finally { setSubmitting(false); }
-  };
-
-  const upcomingMeetings = meetings.filter(m => new Date(m.meeting_date) >= new Date());
-  const pastMeetings = meetings.filter(m => new Date(m.meeting_date) < new Date());
+  if (submitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-2xl p-8 text-center">
+        <div className="text-5xl mb-4">✅</div>
+        <h3 className="text-xl font-bold text-green-800 mb-2">Agenda Item Submitted!</h3>
+        <p className="text-green-700 text-sm">
+          Thank you for your submission. The committee will review it and may include it in an upcoming meeting agenda.
+        </p>
+        <button
+          onClick={() => { setSubmitted(false); setForm(f => ({ ...f, subject: '', description: '', preferred_date: '' })); }}
+          className="mt-4 px-4 py-2 bg-green-700 text-white rounded-lg text-sm hover:bg-green-800"
+        >
+          Submit Another
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-green-800 text-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <Link href="/" className="text-green-200 hover:text-white text-sm mb-1 block">← Northwood Cemetery</Link>
-              <h1 className="text-3xl font-bold">Cemetery Committee</h1>
-              <p className="text-green-200 mt-1">Northwood Cemetery Preservation & Management Committee</p>
-            </div>
-          </div>
-        </div>
-      </header>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
 
-      {/* Navigation Tabs */}
-      <div className="bg-green-700 text-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1">
-            {[
-              { key: 'meetings', label: 'Meetings & Minutes' },
-              { key: 'submit-agenda', label: 'Submit Agenda Item' },
-              { key: 'change-request', label: 'Request a Change' },
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveSection(tab.key as typeof activeSection)}
-                className={`px-5 py-3 text-sm font-medium transition-colors ${activeSection === tab.key ? 'bg-white text-green-800' : 'text-green-100 hover:bg-green-600'}`}
-              >
-                {tab.label}
-              </button>
-            ))}
+      {/* Contact info — pre-filled, read-only */}
+      <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+        <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">Your Contact Information</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Full Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              required
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Email</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              required
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Phone (optional)</label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
           </div>
         </div>
       </div>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Agenda item */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Agenda Item Subject *</label>
+        <input
+          type="text"
+          value={form.subject}
+          onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+          required
+          placeholder="Brief title for your agenda item"
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+        <textarea
+          value={form.description}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          required
+          rows={5}
+          placeholder="Please describe the issue, concern, or topic you would like the committee to address..."
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Meeting Date (optional)</label>
+        <input
+          type="date"
+          value={form.preferred_date}
+          onChange={e => setForm(f => ({ ...f, preferred_date: e.target.value }))}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full py-3 bg-green-700 hover:bg-green-800 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
+      >
+        {submitting ? 'Submitting...' : 'Submit Agenda Item'}
+      </button>
+    </form>
+  );
+}
 
-        {/* Meetings Section */}
-        {activeSection === 'meetings' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Meeting List */}
-            <div className="md:col-span-1">
-              {upcomingMeetings.length > 0 && (
-                <div className="mb-6">
-                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Upcoming Meetings</h2>
-                  <div className="space-y-2">
-                    {upcomingMeetings.map(m => (
-                      <button
-                        key={m.id}
-                        onClick={() => loadMeetingDetails(m)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${selectedMeeting?.id === m.id ? 'bg-green-50 border-green-400' : 'bg-white border-gray-200 hover:border-green-300'}`}
-                      >
-                        <div className="font-medium text-gray-900 text-sm">{m.title}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {new Date(m.meeting_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                        </div>
-                        <div className="flex gap-1 mt-1">
-                          {m.agenda_published && <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">Agenda</span>}
-                          {m.minutes_published && <span className="text-xs bg-green-100 text-green-600 px-1.5 py-0.5 rounded">Minutes</span>}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {pastMeetings.length > 0 && (
-                <div>
-                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Past Meetings</h2>
-                  <div className="space-y-2">
-                    {pastMeetings.slice(0, 10).map(m => (
-                      <button
-                        key={m.id}
-                        onClick={() => loadMeetingDetails(m)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${selectedMeeting?.id === m.id ? 'bg-green-50 border-green-400' : 'bg-white border-gray-200 hover:border-green-300'}`}
-                      >
-                        <div className="font-medium text-gray-900 text-sm">{m.title}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {new Date(m.meeting_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                        </div>
-                        <div className="flex gap-1 mt-1">
-                          {m.agenda_published && <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">Agenda</span>}
-                          {m.minutes_published && <span className="text-xs bg-green-100 text-green-600 px-1.5 py-0.5 rounded">Minutes</span>}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {meetings.length === 0 && (
-                <div className="text-center py-8 bg-white rounded-xl border border-gray-200">
-                  <p className="text-gray-500 text-sm">No meetings scheduled yet</p>
-                </div>
-              )}
-            </div>
+// ─── Section: Change Request / Correction ─────────────────────────────────────
 
-            {/* Meeting Detail */}
-            <div className="md:col-span-2">
-              {!selectedMeeting ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-                  <div className="text-5xl mb-4">📅</div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Select a Meeting</h3>
-                  <p className="text-gray-500 text-sm">Click on a meeting from the list to view its agenda and minutes.</p>
-                </div>
-              ) : loadingMeeting ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">Loading...</div>
-              ) : (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="bg-green-50 border-b border-green-100 p-5">
-                    <h2 className="text-xl font-bold text-gray-900">{selectedMeeting.title}</h2>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {new Date(selectedMeeting.meeting_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                      {selectedMeeting.start_time && ` · ${selectedMeeting.start_time}`}
-                      {selectedMeeting.location && ` · ${selectedMeeting.location}`}
-                    </p>
-                    {selectedMeeting.description && <p className="text-sm text-gray-600 mt-2">{selectedMeeting.description}</p>}
-                  </div>
+function ChangeRequestForm({ initialPlot, initialOccupant, initialType }: {
+  initialPlot?: string;
+  initialOccupant?: string;
+  initialType?: string;
+}) {
+  const { data: session } = useSession();
+  const [form, setForm] = useState({
+    name: '', email: '', phone: '', relationship: '',
+    subject: initialPlot && initialOccupant
+      ? `Correction for ${initialOccupant} — Plot ${initialPlot}`
+      : initialPlot ? `Correction for Plot ${initialPlot}` : '',
+    details: '',
+    request_type: initialType || 'occupant_details',
+    plot_number: initialPlot || '',
+    occupant_name: initialOccupant || '',
+  });
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
-                  <div className="p-5">
-                    {/* Agenda */}
-                    {selectedMeeting.agenda_published && agendaItems.length > 0 && (
-                      <div className="mb-6">
-                        <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                          <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs">A</span>
-                          Agenda
-                        </h3>
-                        <ol className="space-y-2">
-                          {agendaItems.map(item => (
-                            <li key={item.id} className="flex gap-3">
-                              <span className="w-6 h-6 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">{item.item_number}</span>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                                {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
-                              </div>
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
+  // Pre-fill contact details from user profile
+  useEffect(() => {
+    if (session?.user?.id && !profileLoaded) {
+      fetch('/api/user/profile')
+        .then(r => r.json())
+        .then(data => {
+          if (data.name || data.email) {
+            setForm(f => ({
+              ...f,
+              name: data.name || f.name,
+              email: data.email || f.email,
+              phone: data.phone || f.phone,
+            }));
+            setProfileLoaded(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session, profileLoaded]);
 
-                    {/* Minutes */}
-                    {selectedMeeting.minutes_published && minutes && (
-                      <div>
-                        <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                          <span className="w-6 h-6 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs">M</span>
-                          Meeting Minutes
-                        </h3>
-                        <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
-                          {minutes}
-                        </div>
-                      </div>
-                    )}
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.subject.trim() || !form.details.trim()) {
+      setError('Please fill in the subject and details fields.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch('/api/public/change-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Submission failed');
+      }
+      setSubmitted(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Submission failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-                    {!selectedMeeting.agenda_published && !selectedMeeting.minutes_published && (
-                      <p className="text-gray-500 text-sm text-center py-4">No agenda or minutes published for this meeting yet.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+  if (submitted) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+        <div className="text-5xl mb-4">✅</div>
+        <h3 className="text-xl font-bold text-amber-800 mb-2">Request Submitted!</h3>
+        <p className="text-amber-700 text-sm">
+          Thank you for helping us keep our records accurate. The committee will review your submission and follow up if needed.
+        </p>
+        <button
+          onClick={() => { setSubmitted(false); setForm(f => ({ ...f, subject: '', details: '', plot_number: '', occupant_name: '' })); }}
+          className="mt-4 px-4 py-2 bg-amber-700 text-white rounded-lg text-sm hover:bg-amber-800"
+        >
+          Submit Another
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
+
+      {/* Contact info — pre-filled */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Your Contact Information</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Full Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              required
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
           </div>
-        )}
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Email</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              required
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Phone (optional)</label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+      </div>
 
-        {/* Submit Agenda Item */}
-        {activeSection === 'submit-agenda' && (
+      {/* Request type */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Request Type *</label>
+        <select
+          value={form.request_type}
+          onChange={e => setForm(f => ({ ...f, request_type: e.target.value }))}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+        >
+          <option value="occupant_details">Correction to Occupant Details</option>
+          <option value="media_upload">Upload Photo or Media</option>
+          <option value="plot_info">Correction to Plot Information</option>
+          <option value="other">Other Request</option>
+        </select>
+      </div>
+
+      {/* Plot & Occupant */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Plot Number</label>
+          <input
+            type="text"
+            value={form.plot_number}
+            onChange={e => setForm(f => ({ ...f, plot_number: e.target.value }))}
+            placeholder="e.g. NW-A-001-3"
+            className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Occupant Name</label>
+          <input
+            type="text"
+            value={form.occupant_name}
+            onChange={e => setForm(f => ({ ...f, occupant_name: e.target.value }))}
+            placeholder="Name of the individual"
+            className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Your Relationship to the Occupant</label>
+        <input
+          type="text"
+          value={form.relationship}
+          onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))}
+          placeholder="e.g. Family member, descendant, historian..."
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Subject *</label>
+        <input
+          type="text"
+          value={form.subject}
+          onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+          required
+          placeholder="Brief description of the correction or request"
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Details *</label>
+        <textarea
+          value={form.details}
+          onChange={e => setForm(f => ({ ...f, details: e.target.value }))}
+          required
+          rows={5}
+          placeholder="Please provide the correct information, what needs to be changed, or describe the media you would like to submit..."
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
+      >
+        {submitting ? 'Submitting...' : 'Submit Request'}
+      </button>
+    </form>
+  );
+}
+
+// ─── Main Page Component ───────────────────────────────────────────────────────
+
+function CemeteryCommitteeContent() {
+  const searchParams = useSearchParams();
+  const [activeSection, setActiveSection] = useState<'home' | 'meetings' | 'submit-agenda' | 'change-request'>('home');
+  const [members, setMembers] = useState<CommitteeMember[]>([]);
+  const [upcoming, setUpcoming] = useState<Meeting[]>([]);
+  const [recent, setRecent] = useState<Meeting[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // URL param handling
+  const urlSection = searchParams.get('section');
+  const urlPlot = searchParams.get('plot') || undefined;
+  const urlOccupant = searchParams.get('occupant') || undefined;
+  const urlType = searchParams.get('type') || undefined;
+
+  useEffect(() => {
+    if (urlSection === 'change-request') setActiveSection('change-request');
+    else if (urlSection === 'submit-agenda') setActiveSection('submit-agenda');
+    else if (urlSection === 'meetings') setActiveSection('meetings');
+  }, [urlSection]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [membersRes, meetingsRes] = await Promise.all([
+          fetch('/api/public/committee-members'),
+          fetch('/api/public/meetings'),
+        ]);
+        const membersData = await membersRes.json();
+        const meetingsData = await meetingsRes.json();
+        setMembers(membersData.members || []);
+        setUpcoming(meetingsData.upcoming || []);
+        setRecent(meetingsData.recent || []);
+      } catch {
+        // silently fail
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const navItems = [
+    { key: 'home', label: 'About' },
+    { key: 'meetings', label: 'Meetings' },
+    { key: 'submit-agenda', label: 'Submit Agenda Item' },
+    { key: 'change-request', label: 'Submit a Correction' },
+  ] as const;
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Site header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <Link href="/" className="text-lg font-bold text-gray-900 hover:text-green-700 transition-colors">
+            ← Northwood Cemetery
+          </Link>
+          <nav className="hidden md:flex items-center gap-1">
+            {navItems.map(item => (
+              <button
+                key={item.key}
+                onClick={() => setActiveSection(item.key)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeSection === item.key
+                    ? 'bg-green-700 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+          {/* Mobile nav */}
+          <select
+            value={activeSection}
+            onChange={e => setActiveSection(e.target.value as typeof activeSection)}
+            className="md:hidden border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+          >
+            {navItems.map(item => (
+              <option key={item.key} value={item.key}>{item.label}</option>
+            ))}
+          </select>
+        </div>
+      </header>
+
+      {/* Hero — shown on home tab */}
+      {activeSection === 'home' && (
+        <Hero onNav={(s) => setActiveSection(s as typeof activeSection)} />
+      )}
+
+      {/* Members — shown on home tab */}
+      {activeSection === 'home' && !loading && (
+        <MembersSection members={members} />
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center justify-center py-24">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+        </div>
+      )}
+
+      {/* Meetings tab */}
+      {activeSection === 'meetings' && !loading && (
+        <MeetingsSection upcoming={upcoming} recent={recent} />
+      )}
+
+      {/* Submit Agenda Item tab */}
+      {activeSection === 'submit-agenda' && (
+        <section className="py-16 px-4 bg-gray-50 min-h-[60vh]">
           <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Submit an Agenda Item</h2>
-              <p className="text-gray-600 text-sm mb-6">Have a topic you&apos;d like the Cemetery Committee to address? Submit it here and the committee will review your request.</p>
-
-              {agendaSubmitted ? (
-                <div className="text-center py-8">
-                  <div className="text-5xl mb-4">✅</div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Submission Received!</h3>
-                  <p className="text-gray-600 text-sm mb-4">Thank you for your submission. The Cemetery Committee will review your agenda item and contact you if it is added to an upcoming meeting.</p>
-                  <button onClick={() => { setAgendaSubmitted(false); setAgendaForm({ name: '', email: '', phone: '', subject: '', description: '', preferred_date: '' }); }} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">Submit Another</button>
-                </div>
-              ) : (
-                <form onSubmit={handleAgendaSubmit} className="space-y-4">
-                  {formError && <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm">{formError}</div>}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Your Name *</label>
-                      <input required type="text" value={agendaForm.name} onChange={e => setAgendaForm(f => ({ ...f, name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
-                      <input required type="email" value={agendaForm.email} onChange={e => setAgendaForm(f => ({ ...f, email: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                      <input type="tel" value={agendaForm.phone} onChange={e => setAgendaForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Meeting Date</label>
-                      <input type="date" value={agendaForm.preferred_date} onChange={e => setAgendaForm(f => ({ ...f, preferred_date: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Agenda Item Subject *</label>
-                    <input required type="text" value={agendaForm.subject} onChange={e => setAgendaForm(f => ({ ...f, subject: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Brief title for your agenda item" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                    <textarea required value={agendaForm.description} onChange={e => setAgendaForm(f => ({ ...f, description: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Please describe the topic you'd like to bring before the committee..." />
-                  </div>
-                  <button type="submit" disabled={submitting} className="w-full py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50">
-                    {submitting ? 'Submitting...' : 'Submit Agenda Item'}
-                  </button>
-                </form>
-              )}
+            <div className="text-center mb-10">
+              <h2 className="text-3xl font-bold text-gray-900 mb-3">Submit an Agenda Item</h2>
+              <p className="text-gray-500">
+                Have a topic you would like the committee to address? Submit it here and we will review it for inclusion in an upcoming meeting.
+              </p>
             </div>
+            <AuthGate action="submit an agenda item">
+              <AgendaSubmissionForm />
+            </AuthGate>
           </div>
-        )}
+        </section>
+      )}
 
-        {/* Change Request */}
-        {activeSection === 'change-request' && (
+      {/* Change Request / Correction tab */}
+      {activeSection === 'change-request' && (
+        <section className="py-16 px-4 bg-gray-50 min-h-[60vh]">
           <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Request a Change</h2>
-              <p className="text-gray-600 text-sm mb-6">If you have information that needs to be updated for a cemetery occupant, or would like to submit photos or media, please use this form. The committee will review your request.</p>
+            <div className="text-center mb-10">
+              <h2 className="text-3xl font-bold text-gray-900 mb-3">Submit a Correction or Media</h2>
+              <p className="text-gray-500">
+                Help us keep our records accurate. If you have corrections to an occupant&apos;s details, additional information, or photos to share, please submit them here.
+              </p>
+            </div>
+            <AuthGate action="submit a correction or media">
+              <ChangeRequestForm
+                initialPlot={urlPlot}
+                initialOccupant={urlOccupant}
+                initialType={urlType}
+              />
+            </AuthGate>
+          </div>
+        </section>
+      )}
 
-              {changeSubmitted ? (
-                <div className="text-center py-8">
-                  <div className="text-5xl mb-4">✅</div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Request Received!</h3>
-                  <p className="text-gray-600 text-sm mb-4">Thank you for your submission. The Cemetery Committee will review your change request and contact you with any questions or updates.</p>
-                  <button onClick={() => { setChangeSubmitted(false); setChangeForm({ name: '', email: '', phone: '', relationship: '', subject: '', details: '', request_type: 'occupant_details', plot_number: '', occupant_name: '' }); }} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">Submit Another</button>
-                </div>
-              ) : (
-                <form onSubmit={handleChangeSubmit} className="space-y-4">
-                  {formError && <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm">{formError}</div>}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Request Type *</label>
-                    <select value={changeForm.request_type} onChange={e => setChangeForm(f => ({ ...f, request_type: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                      <option value="occupant_details">Update Occupant Details (name, dates, etc.)</option>
-                      <option value="media_upload">Submit Photos or Media</option>
-                      <option value="other">Other Request</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Your Name *</label>
-                      <input required type="text" value={changeForm.name} onChange={e => setChangeForm(f => ({ ...f, name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
-                      <input required type="email" value={changeForm.email} onChange={e => setChangeForm(f => ({ ...f, email: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                      <input type="tel" value={changeForm.phone} onChange={e => setChangeForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Relationship to Occupant</label>
-                      <select value={changeForm.relationship} onChange={e => setChangeForm(f => ({ ...f, relationship: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="">Select...</option>
-                        <option value="family">Family Member</option>
-                        <option value="friend">Friend</option>
-                        <option value="researcher">Genealogy Researcher</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Occupant Name</label>
-                      <input type="text" value={changeForm.occupant_name} onChange={e => setChangeForm(f => ({ ...f, occupant_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Name of the deceased" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Plot Number (if known)</label>
-                      <input type="text" value={changeForm.plot_number} onChange={e => setChangeForm(f => ({ ...f, plot_number: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. NW-A-001-1" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Subject *</label>
-                    <input required type="text" value={changeForm.subject} onChange={e => setChangeForm(f => ({ ...f, subject: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Brief description of the change requested" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Details *</label>
-                    <textarea required value={changeForm.details} onChange={e => setChangeForm(f => ({ ...f, details: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Please provide as much detail as possible about the change you are requesting..." />
-                  </div>
-                  <button type="submit" disabled={submitting} className="w-full py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50">
-                    {submitting ? 'Submitting...' : 'Submit Change Request'}
-                  </button>
-                </form>
-              )}
+      {/* Info bar */}
+      {activeSection === 'home' && (
+        <section className="bg-green-900 text-white py-12 px-4">
+          <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+            <div>
+              <div className="text-3xl mb-2">📋</div>
+              <h3 className="font-bold mb-1">Meeting Agendas</h3>
+              <p className="text-green-300 text-sm">Published before each meeting for public review.</p>
+              <button onClick={() => setActiveSection('meetings')} className="mt-3 text-xs text-green-400 hover:text-white underline">
+                View Schedule →
+              </button>
+            </div>
+            <div>
+              <div className="text-3xl mb-2">✏️</div>
+              <h3 className="font-bold mb-1">Submit a Correction</h3>
+              <p className="text-green-300 text-sm">Help us keep records accurate for future generations.</p>
+              <button onClick={() => setActiveSection('change-request')} className="mt-3 text-xs text-green-400 hover:text-white underline">
+                Submit Now →
+              </button>
+            </div>
+            <div>
+              <div className="text-3xl mb-2">🗣️</div>
+              <h3 className="font-bold mb-1">Public Participation</h3>
+              <p className="text-green-300 text-sm">Submit agenda items for upcoming meetings.</p>
+              <button onClick={() => setActiveSection('submit-agenda')} className="mt-3 text-xs text-green-400 hover:text-white underline">
+                Submit Item →
+              </button>
             </div>
           </div>
-        )}
-      </main>
+        </section>
+      )}
 
       {/* Footer */}
-      <footer className="bg-green-800 text-green-200 mt-12 py-6">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm">
-          <p>Northwood Cemetery Committee · Preserving History, Honoring Lives</p>
-          <p className="mt-1"><Link href="/" className="hover:text-white">← Return to Northwood Cemetery</Link></p>
+      <footer className="bg-gray-900 text-gray-400 py-8 px-4">
+        <div className="max-w-4xl mx-auto text-center text-sm">
+          <p className="font-medium text-gray-300 mb-1">Northwood Cemetery Committee</p>
+          <p>Preserving History, Honoring Lives · Southport, NC</p>
+          <p className="mt-3">
+            <Link href="/" className="hover:text-white transition-colors">← Return to Northwood Cemetery</Link>
+          </p>
         </div>
       </footer>
     </div>
@@ -464,7 +940,7 @@ export default function CemeteryCommitteePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
       </div>
     }>
       <CemeteryCommitteeContent />

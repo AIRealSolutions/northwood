@@ -89,6 +89,13 @@ export default function CommitteeDashboardPage() {
             badge={stats.pendingSubmissions}
           />
           <NavCard
+            href="/admin/committee/members"
+            title="Committee Members"
+            description="Manage the public profiles of committee members shown on the Cemetery Committee portal."
+            icon="👥"
+            color="teal"
+          />
+          <NavCard
             href="/cemetery-committee"
             title="Public Portal"
             description="View the public-facing Cemetery Committee page that community members see."
@@ -131,6 +138,7 @@ function NavCard({ href, title, description, icon, color, badge, external }: {
     yellow: 'border-yellow-200 hover:border-yellow-400',
     purple: 'border-purple-200 hover:border-purple-400',
     gray: 'border-gray-200 hover:border-gray-400',
+    teal: 'border-teal-200 hover:border-teal-400',
   };
   return (
     <Link
