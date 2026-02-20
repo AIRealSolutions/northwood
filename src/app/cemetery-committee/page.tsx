@@ -330,10 +330,12 @@ function MeetingsSection({ upcoming, recent }: { upcoming: Meeting[]; recent: Me
 function AuthGate({ action, children }: { action: string; children: React.ReactNode }) {
   const { data: session, status } = useSession();
 
+  // Show a brief spinner only if we're still checking auth (avoids flicker for guests)
+  // Once status is 'unauthenticated', show sign-in prompt immediately
   if (status === 'loading') {
     return (
-      <div className="py-12 text-center text-gray-400">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+      <div className="py-8 text-center text-gray-400">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto"></div>
       </div>
     );
   }
