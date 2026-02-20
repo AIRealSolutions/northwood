@@ -4,6 +4,17 @@ import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+// Dynamically import BlockGridMover to avoid SSR issues
+const BlockGridMover = dynamic(() => import('@/components/admin/BlockGridMover'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-8">
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+    </div>
+  ),
+});
 
 interface DeceasedRecord {
   id: string;
@@ -78,8 +89,9 @@ export default function AdminPlotDetailPage() {
   const [plot, setPlot] = useState<Plot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showGridMover, setShowGridMover] = useState(false);
 
-  // Move modal state
+  // Move modal state (per-occupant move)
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [moveTarget, setMoveTarget] = useState<DeceasedRecord | null>(null);
   const [moveSearch, setMoveSearch] = useState('');
@@ -102,6 +114,7 @@ export default function AdminPlotDetailPage() {
       return;
     }
     fetchPlot();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, status, plotId]);
 
   const fetchPlot = async () => {
@@ -120,20 +133,14 @@ export default function AdminPlotDetailPage() {
 
   const handleMoveSearch = async (q: string) => {
     setMoveSearch(q);
-    if (q.length < 2) {
-      setMoveSearchResults([]);
-      return;
-    }
+    if (q.length < 2) { setMoveSearchResults([]); return; }
     setMoveSearchLoading(true);
     try {
       const res = await fetch(`/api/admin/plots/search?q=${encodeURIComponent(q)}`);
       const json = await res.json();
       setMoveSearchResults((json.data || []).filter((p: PlotSearchResult) => p.id !== plotId));
-    } catch {
-      setMoveSearchResults([]);
-    } finally {
-      setMoveSearchLoading(false);
-    }
+    } catch { setMoveSearchResults([]); }
+    finally { setMoveSearchLoading(false); }
   };
 
   const handleMoveConfirm = async () => {
@@ -208,18 +215,56 @@ export default function AdminPlotDetailPage() {
               </span>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={() => setShowGridMover(!showGridMover)}
+                className={`px-4 py-2 rounded-lg transition-colors font-medium text-sm border ${
+                  showGridMover
+                    ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                    : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
+                }`}
+              >
+                {showGridMover ? '✕ Close Block View' : '⊞ Move in Block'}
+              </button>
               <Link
                 href={`/admin/plots/${plot.id}/edit`}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm"
               >
-                Edit Plot
+                Edit Position
               </Link>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+        {/* ===== VISUAL BLOCK GRID MOVER ===== */}
+        {showGridMover && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Move Plot Data — Section {plot.section} Block View
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                The <span className="font-medium text-blue-600">blue cell</span> is the current plot ({plot.plot_number}).
+                Click any other cell to select it as the destination, then confirm to move all data there.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <BlockGridMover
+                section={plot.section}
+                currentPlotId={plot.id}
+                currentPlotNumber={plot.plot_number}
+                onMoveComplete={() => {
+                  fetchPlot();
+                  setShowGridMover(false);
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ===== MAIN CONTENT GRID ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Plot Details Card */}
           <div className="lg:col-span-1">
@@ -425,7 +470,7 @@ export default function AdminPlotDetailPage() {
         </div>
       </main>
 
-      {/* Move to Another Plot Modal */}
+      {/* Move to Another Plot Modal (per-occupant) */}
       {moveModalOpen && moveTarget && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
@@ -442,7 +487,6 @@ export default function AdminPlotDetailPage() {
                 </div>
               ) : (
                 <>
-                  {/* Search for new plot */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Search for Destination Plot
@@ -454,19 +498,13 @@ export default function AdminPlotDetailPage() {
                       placeholder="Enter plot number (e.g. A-001)..."
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                     />
-                    {moveSearchLoading && (
-                      <p className="text-xs text-gray-500 mt-1">Searching...</p>
-                    )}
+                    {moveSearchLoading && <p className="text-xs text-gray-500 mt-1">Searching...</p>}
                     {moveSearchResults.length > 0 && !selectedNewPlot && (
                       <div className="mt-2 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
                         {moveSearchResults.map((p) => (
                           <button
                             key={p.id}
-                            onClick={() => {
-                              setSelectedNewPlot(p);
-                              setMoveSearch(p.plot_number);
-                              setMoveSearchResults([]);
-                            }}
+                            onClick={() => { setSelectedNewPlot(p); setMoveSearch(p.plot_number); setMoveSearchResults([]); }}
                             className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
                           >
                             <span className="font-medium text-emerald-700">{p.plot_number}</span>
@@ -479,26 +517,13 @@ export default function AdminPlotDetailPage() {
                       </div>
                     )}
                   </div>
-
-                  {/* Selected plot confirmation */}
                   {selectedNewPlot && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                      <p className="text-sm font-medium text-emerald-800">
-                        Destination: Plot {selectedNewPlot.plot_number}
-                      </p>
-                      <p className="text-xs text-emerald-600 mt-0.5">
-                        Section {selectedNewPlot.section} · {selectedNewPlot.plot_type} · {selectedNewPlot.status}
-                      </p>
-                      <button
-                        onClick={() => { setSelectedNewPlot(null); setMoveSearch(''); }}
-                        className="text-xs text-emerald-700 underline mt-1"
-                      >
-                        Change
-                      </button>
+                      <p className="text-sm font-medium text-emerald-800">Destination: Plot {selectedNewPlot.plot_number}</p>
+                      <p className="text-xs text-emerald-600 mt-0.5">Section {selectedNewPlot.section} · {selectedNewPlot.plot_type} · {selectedNewPlot.status}</p>
+                      <button onClick={() => { setSelectedNewPlot(null); setMoveSearch(''); }} className="text-xs text-emerald-700 underline mt-1">Change</button>
                     </div>
                   )}
-
-                  {/* Reason */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Reason for Move <span className="text-gray-400">(optional)</span>
@@ -511,27 +536,15 @@ export default function AdminPlotDetailPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm resize-none"
                     />
                   </div>
-
                   {moveError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                      {moveError}
-                    </div>
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{moveError}</div>
                   )}
                 </>
               )}
             </div>
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
-                onClick={() => {
-                  setMoveModalOpen(false);
-                  setMoveTarget(null);
-                  setMoveSearch('');
-                  setMoveSearchResults([]);
-                  setSelectedNewPlot(null);
-                  setMoveReason('');
-                  setMoveError('');
-                  setMoveSuccess('');
-                }}
+                onClick={() => { setMoveModalOpen(false); setMoveTarget(null); setMoveSearch(''); setMoveSearchResults([]); setSelectedNewPlot(null); setMoveReason(''); setMoveError(''); setMoveSuccess(''); }}
                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
                 disabled={moveLoading}
               >
