@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase as getSupabase } from '@/lib/supabase';
 import { writeAuditLog, auditContextFromSession } from '@/lib/audit';
 
 const ADMIN_ROLES = ['admin'];

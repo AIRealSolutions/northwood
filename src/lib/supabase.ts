@@ -3,6 +3,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 // Get environment variables with fallbacks for build time
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // Create client only if we have valid credentials
 let supabase: SupabaseClient | null = null;
@@ -17,6 +18,22 @@ const getSupabase = (): SupabaseClient => {
     throw new Error('Supabase client not initialized. Check environment variables.');
   }
   return supabase;
+};
+
+// Helper to get a service-role supabase client that bypasses RLS.
+// ONLY use this in server-side API routes (never in client components).
+const getServiceSupabase = (): SupabaseClient => {
+  if (!supabaseUrl) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set.');
+  }
+  // Fall back to anon key if service key is not configured (dev environments)
+  const key = supabaseServiceKey || supabaseAnonKey;
+  if (!key) {
+    throw new Error('No Supabase key available. Check SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+  }
+  return createClient(supabaseUrl, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 };
 
 // TypeScript types for database tables
@@ -357,5 +374,5 @@ export const deceasedAPI = {
   }
 };
 
-// Export the supabase client and helper for direct use if needed
-export { supabase, getSupabase };
+// Export the supabase client and helpers for direct use if needed
+export { supabase, getSupabase, getServiceSupabase };

@@ -1,4 +1,4 @@
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase as getSupabase } from '@/lib/supabase';
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'MOVE';
 

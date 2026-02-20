@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase as getSupabase } from '@/lib/supabase';
 
 // GET /api/admin/plots/search?q=A-001 - Search plots by plot number
 export async function GET(request: NextRequest) {
