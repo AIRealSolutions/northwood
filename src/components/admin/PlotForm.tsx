@@ -26,7 +26,7 @@ interface PlotFormProps {
 }
 
 const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-const PLOT_TYPES = ['single', 'double', 'family', 'infant', 'cremation', 'mausoleum'];
+const PLOT_TYPES = ['standard', 'cremation', 'hybrid'];
 const STATUSES = ['available', 'reserved', 'occupied'];
 
 export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
