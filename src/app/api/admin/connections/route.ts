@@ -25,6 +25,9 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         relationship,
+        member_relationship,
+        occupant_relationship,
+        relationship_category,
         notes,
         status,
         review_notes,

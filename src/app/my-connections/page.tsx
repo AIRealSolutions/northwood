@@ -10,6 +10,8 @@ import Link from 'next/link';
 interface Connection {
   id: string;
   relationship: string;
+  member_relationship?: string | null;
+  occupant_relationship?: string | null;
   notes: string | null;
   status: string;
   created_at: string;
@@ -180,8 +182,19 @@ export default function MyConnectionsPage() {
 
                   <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
                     <span>
-                      <strong>Relationship:</strong> {conn.relationship}
+                      <strong>I am the occupant&apos;s:</strong>{' '}
+                      <span className="text-blue-700 font-semibold">
+                        {conn.member_relationship
+                          ? conn.member_relationship.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                          : conn.relationship}
+                      </span>
                     </span>
+                    {conn.occupant_relationship && (
+                      <span>
+                        <strong>The occupant is my:</strong>{' '}
+                        <span className="text-green-700 font-semibold">{conn.occupant_relationship}</span>
+                      </span>
+                    )}
                     {conn.plots && (
                       <span>
                         <strong>Plot:</strong>{' '}

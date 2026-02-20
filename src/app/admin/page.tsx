@@ -169,6 +169,12 @@ export default function AdminDashboard() {
               icon="🏛️"
             />
             <ActionButton
+              href="/admin/audit-log"
+              title="Audit Log"
+              description="View all database changes with full history and attribution"
+              icon="📋"
+            />
+            <ActionButton
               href="/admin/settings"
               title="System Settings"
               description="Configure system settings"
@@ -179,9 +185,14 @@ export default function AdminDashboard() {
 
         {/* Recent Activity */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Recent Activity</h2>
+            <Link href="/admin/audit-log" className="text-sm text-emerald-600 hover:text-emerald-800 font-medium">
+              View full audit log →
+            </Link>
+          </div>
           <div className="text-center text-gray-500 py-8">
-            <p>Activity log coming soon...</p>
+            <p className="text-sm">All changes to plots, users, and connections are tracked in the <Link href="/admin/audit-log" className="text-emerald-600 hover:underline">Audit Log</Link>.</p>
           </div>
         </div>
       </main>

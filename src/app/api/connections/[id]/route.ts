@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getSupabase } from '@/lib/supabase';
+import { writeAuditLog, auditContextFromSession } from '@/lib/audit';
 
 const ADMIN_ROLES = ['admin', 'cemetery_committee'];
 
@@ -20,7 +21,7 @@ export async function DELETE(
 
     const { data: conn } = await supabase
       .from('plot_connections')
-      .select('id, user_id')
+      .select('id, user_id, plot_id, relationship')
       .eq('id', id)
       .maybeSingle();
 
@@ -33,6 +34,20 @@ export async function DELETE(
 
     const { error } = await supabase.from('plot_connections').delete().eq('id', id);
     if (error) throw error;
+
+    // Write audit log
+    const ctx = auditContextFromSession(session);
+    await writeAuditLog({
+      table_name: 'plot_connections',
+      record_id: id,
+      action: 'DELETE',
+      old_values: conn as Record<string, unknown>,
+      summary: `Family connection ${id} deleted`,
+      changed_by_user_id: ctx.userId,
+      changed_by_name: ctx.userName,
+      changed_by_email: ctx.userEmail,
+      changed_by_role: ctx.userRole,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -67,7 +82,7 @@ export async function PATCH(
     // Fetch the connection being reviewed
     const { data: conn, error: connError } = await supabase
       .from('plot_connections')
-      .select('id, user_id, plot_id, status')
+      .select('id, user_id, plot_id, status, relationship, member_relationship')
       .eq('id', id)
       .maybeSingle();
 
@@ -102,8 +117,7 @@ export async function PATCH(
       }, { status: 403 });
     }
 
-    // Update the connection — omit reviewed_at and updated_at to avoid timestamp coercion
-    // Supabase will handle updated_at via triggers if configured, otherwise we skip it
+    // Update the connection
     const { data: updated, error: updateError } = await supabase
       .from('plot_connections')
       .update({
@@ -119,6 +133,21 @@ export async function PATCH(
       console.error('Connection update error:', updateError);
       throw updateError;
     }
+
+    // Write audit log
+    const ctx = auditContextFromSession(session);
+    await writeAuditLog({
+      table_name: 'plot_connections',
+      record_id: id,
+      action: status === 'approved' ? 'APPROVE' : 'REJECT',
+      old_values: { status: conn.status },
+      new_values: { status, review_notes: review_notes?.trim() || null },
+      summary: `Family connection ${id} ${status} by ${isAdmin ? 'admin' : 'peer family member'}`,
+      changed_by_user_id: ctx.userId,
+      changed_by_name: ctx.userName,
+      changed_by_email: ctx.userEmail,
+      changed_by_role: ctx.userRole,
+    });
 
     return NextResponse.json({
       connection: updated,

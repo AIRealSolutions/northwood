@@ -15,7 +15,7 @@ interface PlotCell {
     id: string;
     first_name: string;
     last_name: string;
-    date_of_death?: string;
+    death_date?: string;
   }>;
 }
 

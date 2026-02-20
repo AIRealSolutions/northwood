@@ -36,7 +36,7 @@ export async function GET(
         id,
         first_name,
         last_name,
-        date_of_death
+        death_date
       )
     `)
     .eq('section', section.toUpperCase())

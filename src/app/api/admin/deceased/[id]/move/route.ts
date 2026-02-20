@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getSupabase } from '@/lib/supabase';
+import { writeAuditLog, auditContextFromSession } from '@/lib/audit';
 
 // PUT /api/admin/deceased/[id]/move
 // Moves a deceased record to a different plot by updating plot_id only.
@@ -25,8 +26,10 @@ export async function PUT(
       return NextResponse.json({ error: 'new_plot_id is required' }, { status: 400 });
     }
 
+    const supabase = getSupabase();
+
     // Verify the target plot exists
-    const { data: newPlot, error: plotError } = await getSupabase()
+    const { data: newPlot, error: plotError } = await supabase
       .from('plots')
       .select('id, plot_number, section, status')
       .eq('id', new_plot_id)
@@ -37,7 +40,7 @@ export async function PUT(
     }
 
     // Get the current deceased record to know the old plot
-    const { data: deceased, error: deceasedError } = await getSupabase()
+    const { data: deceased, error: deceasedError } = await supabase
       .from('deceased_records')
       .select('id, first_name, last_name, plot_id')
       .eq('id', id)
@@ -50,7 +53,7 @@ export async function PUT(
     const oldPlotId = deceased.plot_id;
 
     // Only update plot_id — nothing else
-    const { data: updated, error: updateError } = await getSupabase()
+    const { data: updated, error: updateError } = await supabase
       .from('deceased_records')
       .update({ plot_id: new_plot_id })
       .eq('id', id)
@@ -63,21 +66,21 @@ export async function PUT(
     }
 
     // Update burial_services plot_id if any exist for this deceased record
-    await getSupabase()
+    await supabase
       .from('burial_services')
       .update({ plot_id: new_plot_id })
       .eq('deceased_id', id);
 
     // If old plot now has no remaining deceased records, mark it available
     if (oldPlotId && oldPlotId !== new_plot_id) {
-      const { data: remaining } = await getSupabase()
+      const { data: remaining } = await supabase
         .from('deceased_records')
         .select('id')
         .eq('plot_id', oldPlotId)
         .limit(1);
 
       if (!remaining || remaining.length === 0) {
-        await getSupabase()
+        await supabase
           .from('plots')
           .update({ status: 'available' })
           .eq('id', oldPlotId);
@@ -85,10 +88,25 @@ export async function PUT(
     }
 
     // Mark the new plot as occupied
-    await getSupabase()
+    await supabase
       .from('plots')
       .update({ status: 'occupied' })
       .eq('id', new_plot_id);
+
+    // Write audit log
+    const ctx = auditContextFromSession(session);
+    await writeAuditLog({
+      table_name: 'deceased_records',
+      record_id: id,
+      action: 'MOVE',
+      old_values: { plot_id: oldPlotId },
+      new_values: { plot_id: new_plot_id, plot_number: (newPlot as any).plot_number },
+      summary: `${deceased.first_name} ${deceased.last_name} moved to plot ${(newPlot as any).plot_number}`,
+      changed_by_user_id: ctx.userId,
+      changed_by_name: ctx.userName,
+      changed_by_email: ctx.userEmail,
+      changed_by_role: ctx.userRole,
+    });
 
     return NextResponse.json({
       message: `Moved ${deceased.first_name} ${deceased.last_name} to plot ${(newPlot as any).plot_number}`,

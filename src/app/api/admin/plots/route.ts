@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getSupabase } from '@/lib/supabase';
+import { writeAuditLog, auditContextFromSession } from '@/lib/audit';
 
 // GET /api/admin/plots - List all plots with pagination and filtering
 export async function GET(request: NextRequest) {
@@ -106,6 +107,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // Write audit log
+    const ctx = auditContextFromSession(session);
+    await writeAuditLog({
+      table_name: 'plots',
+      record_id: data.id,
+      action: 'CREATE',
+      new_values: data as Record<string, unknown>,
+      summary: `Plot ${data.plot_number} created in Section ${data.section}`,
+      changed_by_user_id: ctx.userId,
+      changed_by_name: ctx.userName,
+      changed_by_email: ctx.userEmail,
+      changed_by_role: ctx.userRole,
+    });
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

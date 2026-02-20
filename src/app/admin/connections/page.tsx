@@ -17,6 +17,9 @@ interface User {
 interface Connection {
   id: string;
   relationship: string;
+  member_relationship?: string | null;
+  occupant_relationship?: string | null;
+  relationship_category?: string | null;
   notes: string | null;
   status: string;
   created_at: string;
@@ -221,18 +224,32 @@ export default function AdminConnectionsPage() {
                         )}
                       </div>
 
-                      {/* Connection claim */}
-                      <div className="flex items-center gap-2 flex-wrap mb-3">
-                        <span className="text-sm text-gray-500">Claims to be</span>
-                        <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium">
-                          {conn.relationship}
-                        </span>
-                        <span className="text-sm text-gray-500">of</span>
-                        <span className="font-semibold text-gray-900 text-sm">
-                          {conn.deceased_records
-                            ? `${conn.deceased_records.first_name} ${conn.deceased_records.last_name}`
-                            : 'General plot connection'}
-                        </span>
+                      {/* Connection claim — bidirectional */}
+                      <div className="mb-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Member is the occupant&apos;s:</span>
+                          <span className="px-2.5 py-0.5 bg-white text-blue-700 border border-blue-200 rounded-lg text-sm font-bold">
+                            {conn.member_relationship
+                              ? conn.member_relationship.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                              : conn.relationship}
+                          </span>
+                        </div>
+                        {conn.occupant_relationship && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">Occupant is the member&apos;s:</span>
+                            <span className="px-2.5 py-0.5 bg-white text-green-700 border border-green-200 rounded-lg text-sm font-bold">
+                              {conn.occupant_relationship}
+                            </span>
+                          </div>
+                        )}
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Connected to:</span>
+                          <span className="font-semibold text-gray-900 text-sm">
+                            {conn.deceased_records
+                              ? `${conn.deceased_records.first_name} ${conn.deceased_records.last_name}`
+                              : 'General plot connection'}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Plot info */}

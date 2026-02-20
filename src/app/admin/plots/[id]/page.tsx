@@ -2,19 +2,8 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
-
-// Dynamically import BlockGridMover to avoid SSR issues
-const BlockGridMover = dynamic(() => import('@/components/admin/BlockGridMover'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center py-8">
-      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
-    </div>
-  ),
-});
 
 interface DeceasedRecord {
   id: string;
@@ -66,18 +55,19 @@ interface Plot {
   plot_reservations: PlotReservation[];
 }
 
-interface PlotSearchResult {
+interface AvailablePlot {
   id: string;
   plot_number: string;
   section: string;
-  status: string;
+  row_number: number;
+  plot_position: number;
   plot_type: string;
 }
 
 const STATUS_COLORS = {
-  available: 'bg-green-100 text-green-800',
-  reserved: 'bg-yellow-100 text-yellow-800',
-  occupied: 'bg-red-100 text-red-800',
+  available: 'bg-green-100 text-green-800 border-green-200',
+  reserved: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  occupied: 'bg-red-100 text-red-800 border-red-200',
 };
 
 export default function AdminPlotDetailPage() {
@@ -89,19 +79,37 @@ export default function AdminPlotDetailPage() {
   const [plot, setPlot] = useState<Plot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showGridMover, setShowGridMover] = useState(false);
 
-  // Move modal state (per-occupant move)
-  const [moveModalOpen, setMoveModalOpen] = useState(false);
-  const [moveTarget, setMoveTarget] = useState<DeceasedRecord | null>(null);
-  const [moveSearch, setMoveSearch] = useState('');
-  const [moveSearchResults, setMoveSearchResults] = useState<PlotSearchResult[]>([]);
-  const [moveSearchLoading, setMoveSearchLoading] = useState(false);
-  const [selectedNewPlot, setSelectedNewPlot] = useState<PlotSearchResult | null>(null);
-  const [moveReason, setMoveReason] = useState('');
-  const [moveLoading, setMoveLoading] = useState(false);
+  // Mode: null = default view, 'edit-info' = edit form inline, 'move-block' = move to available
+  const [mode, setMode] = useState<null | 'move-block'>(null);
+
+  // Move-in-block state
+  const [availablePlots, setAvailablePlots] = useState<AvailablePlot[]>([]);
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
+  const [selectedDest, setSelectedDest] = useState<AvailablePlot | null>(null);
+  const [moveNotes, setMoveNotes] = useState('');
+  const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState('');
   const [moveSuccess, setMoveSuccess] = useState('');
+
+  // Inline edit state
+  const [editForm, setEditForm] = useState({
+    plot_number: '',
+    section: '',
+    row_number: '',
+    plot_position: '',
+    plot_type: '',
+    status: '',
+    owner_name: '',
+    owner_contact: '',
+    purchase_date: '',
+    price: '',
+    notes: '',
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+  const [showEditForm, setShowEditForm] = useState(false);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -124,6 +132,21 @@ export default function AdminPlotDetailPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
       setPlot(json.data);
+      // Pre-fill edit form
+      const p = json.data;
+      setEditForm({
+        plot_number: p.plot_number || '',
+        section: p.section || '',
+        row_number: String(p.row_number || ''),
+        plot_position: String(p.plot_position || ''),
+        plot_type: p.plot_type || 'standard',
+        status: p.status || 'available',
+        owner_name: p.owner_name || '',
+        owner_contact: p.owner_contact || '',
+        purchase_date: p.purchase_date ? p.purchase_date.split('T')[0] : '',
+        price: p.price ? String(p.price) : '',
+        notes: p.notes || '',
+      });
     } catch (err: any) {
       setError(err.message || 'Failed to load plot');
     } finally {
@@ -131,46 +154,105 @@ export default function AdminPlotDetailPage() {
     }
   };
 
-  const handleMoveSearch = async (q: string) => {
-    setMoveSearch(q);
-    if (q.length < 2) { setMoveSearchResults([]); return; }
-    setMoveSearchLoading(true);
+  // Load available plots in the same section when Move mode is activated
+  const loadAvailablePlots = useCallback(async (section: string) => {
+    setLoadingAvailable(true);
+    setAvailablePlots([]);
     try {
-      const res = await fetch(`/api/admin/plots/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/admin/plots/section/${section}`);
       const json = await res.json();
-      setMoveSearchResults((json.data || []).filter((p: PlotSearchResult) => p.id !== plotId));
-    } catch { setMoveSearchResults([]); }
-    finally { setMoveSearchLoading(false); }
-  };
+      if (!res.ok) throw new Error(json.error);
+      // Filter to only available plots (exclude current plot)
+      const available = (json.plots || []).filter(
+        (p: any) => p.status === 'available' && p.id !== plotId
+      );
+      setAvailablePlots(available);
+    } catch {
+      setAvailablePlots([]);
+    } finally {
+      setLoadingAvailable(false);
+    }
+  }, [plotId]);
 
-  const handleMoveConfirm = async () => {
-    if (!moveTarget || !selectedNewPlot) return;
-    setMoveLoading(true);
+  const handleEnterMoveMode = () => {
+    setMode('move-block');
+    setSelectedDest(null);
+    setMoveNotes('');
     setMoveError('');
     setMoveSuccess('');
+    if (plot) loadAvailablePlots(plot.section);
+  };
+
+  const handleCancelMove = () => {
+    setMode(null);
+    setSelectedDest(null);
+    setMoveNotes('');
+    setMoveError('');
+    setMoveSuccess('');
+  };
+
+  const handleConfirmMove = async () => {
+    if (!selectedDest || !plot) return;
+    setMoving(true);
+    setMoveError('');
     try {
-      const res = await fetch(`/api/admin/deceased/${moveTarget.id}/move`, {
-        method: 'PUT',
+      const res = await fetch(`/api/admin/plots/${plotId}/overwrite`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ new_plot_id: selectedNewPlot.id, reason: moveReason }),
+        body: JSON.stringify({
+          destination_plot_id: selectedDest.id,
+          notes: moveNotes,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
-      setMoveSuccess(json.message);
+      setMoveSuccess(`✓ All data moved from ${plot.plot_number} to ${selectedDest.plot_number}. This plot is now available.`);
+      // After 2 seconds, navigate to the destination plot
       setTimeout(() => {
-        setMoveModalOpen(false);
-        setMoveTarget(null);
-        setMoveSearch('');
-        setMoveSearchResults([]);
-        setSelectedNewPlot(null);
-        setMoveReason('');
-        setMoveSuccess('');
-        fetchPlot();
-      }, 1500);
+        router.push(`/admin/plots/${selectedDest.id}`);
+      }, 2500);
     } catch (err: any) {
-      setMoveError(err.message || 'Failed to move record');
+      setMoveError(err.message || 'Move failed');
     } finally {
-      setMoveLoading(false);
+      setMoving(false);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditLoading(true);
+    setEditError('');
+    setEditSuccess('');
+    try {
+      const res = await fetch(`/api/admin/plots/${plotId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plot_number: editForm.plot_number,
+          section: editForm.section,
+          row_number: editForm.row_number,
+          plot_position: editForm.plot_position,
+          plot_type: editForm.plot_type,
+          status: editForm.status,
+          owner_name: editForm.owner_name || null,
+          owner_contact: editForm.owner_contact || null,
+          purchase_date: editForm.purchase_date || null,
+          price: editForm.price || null,
+          notes: editForm.notes || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setEditSuccess('Plot information saved successfully.');
+      setTimeout(() => {
+        setShowEditForm(false);
+        setEditSuccess('');
+        fetchPlot();
+      }, 1200);
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to save');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -198,214 +280,512 @@ export default function AdminPlotDetailPage() {
     );
   }
 
+  // Group available plots by row for the move picker
+  const availableByRow: Record<number, AvailablePlot[]> = {};
+  for (const p of availablePlots) {
+    if (!availableByRow[p.row_number]) availableByRow[p.row_number] = [];
+    availableByRow[p.row_number].push(p);
+  }
+  const sortedRows = Object.keys(availableByRow).map(Number).sort((a, b) => a - b);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Link href="/admin/plots" className="text-gray-500 hover:text-gray-700 text-sm">
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Link href="/admin/plots" className="text-gray-400 hover:text-gray-600 text-sm shrink-0">
                 ← Plot Management
               </Link>
               <span className="text-gray-300">/</span>
-              <h1 className="text-2xl font-bold text-gray-900">Plot {plot.plot_number}</h1>
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${STATUS_COLORS[plot.status]}`}>
+              <h1 className="text-xl font-bold text-gray-900 truncate">Plot {plot.plot_number}</h1>
+              <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border shrink-0 ${STATUS_COLORS[plot.status]}`}>
                 {plot.status}
               </span>
             </div>
-            <div className="flex gap-3">
+            {/* Action buttons — only show when not in move mode */}
+            {mode !== 'move-block' && (
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => setShowEditForm(!showEditForm)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    showEditForm
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
+                  }`}
+                >
+                  {showEditForm ? '✕ Close Edit' : '✏ Edit Plot Info'}
+                </button>
+                <button
+                  onClick={handleEnterMoveMode}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border bg-white text-amber-700 border-amber-300 hover:bg-amber-50 transition-colors"
+                >
+                  ⇄ Move to Available Plot
+                </button>
+              </div>
+            )}
+            {mode === 'move-block' && !moveSuccess && (
               <button
-                onClick={() => setShowGridMover(!showGridMover)}
-                className={`px-4 py-2 rounded-lg transition-colors font-medium text-sm border ${
-                  showGridMover
-                    ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
-                    : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
-                }`}
+                onClick={handleCancelMove}
+                className="px-4 py-2 rounded-lg text-sm font-medium border bg-white text-gray-600 border-gray-300 hover:bg-gray-50 transition-colors shrink-0"
               >
-                {showGridMover ? '✕ Close Block View' : '⊞ Move in Block'}
+                ✕ Cancel Move
               </button>
-              <Link
-                href={`/admin/plots/${plot.id}/edit`}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm"
-              >
-                Edit Position
-              </Link>
-            </div>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
-        {/* ===== VISUAL BLOCK GRID MOVER ===== */}
-        {showGridMover && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Move Plot Data — Section {plot.section} Block View
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                The <span className="font-medium text-blue-600">blue cell</span> is the current plot ({plot.plot_number}).
-                Click any other cell to select it as the destination, then confirm to move all data there.
-              </p>
+        {/* ===== EDIT PLOT INFO PANEL ===== */}
+        {showEditForm && mode !== 'move-block' && (
+          <div className="bg-white rounded-xl border border-emerald-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-emerald-100 bg-emerald-50 rounded-t-xl">
+              <h2 className="text-base font-semibold text-emerald-900">Edit Plot Information</h2>
+              <p className="text-xs text-emerald-700 mt-0.5">Update plot details, owner info, status, and position.</p>
             </div>
-            <div className="px-6 py-5">
-              <BlockGridMover
-                section={plot.section}
-                currentPlotId={plot.id}
-                currentPlotNumber={plot.plot_number}
-                onMoveComplete={() => {
-                  fetchPlot();
-                  setShowGridMover(false);
-                }}
-              />
-            </div>
+            <form onSubmit={handleEditSubmit} className="px-6 py-5 space-y-5">
+              {/* Position */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Position</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Plot Number</label>
+                    <input
+                      type="text"
+                      value={editForm.plot_number}
+                      onChange={e => setEditForm(f => ({ ...f, plot_number: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Section</label>
+                    <select
+                      value={editForm.section}
+                      onChange={e => setEditForm(f => ({ ...f, section: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      required
+                    >
+                      {['A','B','C','D','E','F','G','H'].map(s => (
+                        <option key={s} value={s}>Section {s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Row</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editForm.row_number}
+                      onChange={e => setEditForm(f => ({ ...f, row_number: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Position</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editForm.plot_position}
+                      onChange={e => setEditForm(f => ({ ...f, plot_position: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Type & Status */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Type & Status</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Plot Type</label>
+                    <select
+                      value={editForm.plot_type}
+                      onChange={e => setEditForm(f => ({ ...f, plot_type: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="standard">Standard</option>
+                      <option value="cremation">Cremation</option>
+                      <option value="hybrid">Hybrid</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                    <select
+                      value={editForm.status}
+                      onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="available">Available</option>
+                      <option value="reserved">Reserved</option>
+                      <option value="occupied">Occupied</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Owner */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Owner Information</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Owner Name</label>
+                    <input
+                      type="text"
+                      value={editForm.owner_name}
+                      onChange={e => setEditForm(f => ({ ...f, owner_name: e.target.value }))}
+                      placeholder="Full name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Owner Contact</label>
+                    <input
+                      type="text"
+                      value={editForm.owner_contact}
+                      onChange={e => setEditForm(f => ({ ...f, owner_contact: e.target.value }))}
+                      placeholder="Phone or email"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Purchase Date</label>
+                    <input
+                      type="date"
+                      value={editForm.purchase_date}
+                      onChange={e => setEditForm(f => ({ ...f, purchase_date: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Price & Notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Price ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editForm.price}
+                    onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                    placeholder="e.g. 2000.00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                  <input
+                    type="text"
+                    value={editForm.notes}
+                    onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Any additional notes..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{editError}</div>
+              )}
+              {editSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{editSuccess}</div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditForm(false); setEditError(''); setEditSuccess(''); }}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+                  disabled={editLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium disabled:opacity-50"
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
-        {/* ===== MAIN CONTENT GRID ===== */}
+        {/* ===== MOVE TO AVAILABLE PLOT PANEL ===== */}
+        {mode === 'move-block' && (
+          <div className="bg-white rounded-xl border border-amber-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-amber-100 bg-amber-50 rounded-t-xl">
+              <h2 className="text-base font-semibold text-amber-900">
+                ⇄ Move Plot Data — Section {plot.section}
+              </h2>
+              <p className="text-sm text-amber-700 mt-1">
+                Select an <strong>available</strong> plot in Section {plot.section} to move all data from{' '}
+                <strong>{plot.plot_number}</strong> there. The current plot will become available.
+              </p>
+            </div>
+
+            {moveSuccess ? (
+              <div className="px-6 py-8 text-center">
+                <div className="text-4xl mb-3">✅</div>
+                <p className="text-green-800 font-semibold text-base">{moveSuccess}</p>
+                <p className="text-sm text-gray-500 mt-2">Redirecting to the new plot location...</p>
+              </div>
+            ) : (
+              <div className="px-6 py-5 space-y-5">
+                {/* What gets moved */}
+                <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-sm text-blue-800">
+                  <strong>What will be moved:</strong> All deceased records, burial services, reservations, and family connections from{' '}
+                  <strong>{plot.plot_number}</strong> will be transferred to the selected destination.
+                  Plot <strong>{plot.plot_number}</strong> will be marked <span className="font-semibold text-green-700">available</span>.
+                </div>
+
+                {/* Available plots picker */}
+                {loadingAvailable ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-600"></div>
+                    Loading available plots in Section {plot.section}...
+                  </div>
+                ) : availablePlots.length === 0 ? (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-6 text-center text-gray-500">
+                    <div className="text-3xl mb-2">🔍</div>
+                    <p className="font-medium">No available plots found in Section {plot.section}</p>
+                    <p className="text-xs mt-1">All plots in this section are currently occupied or reserved.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-700">
+                        Available Plots in Section {plot.section}
+                        <span className="ml-2 text-xs font-normal text-gray-400">({availablePlots.length} available)</span>
+                      </h3>
+                      {selectedDest && (
+                        <button
+                          onClick={() => setSelectedDest(null)}
+                          className="text-xs text-amber-600 hover:text-amber-800 underline"
+                        >
+                          Change selection
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Group by row */}
+                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                      {sortedRows.map(rowNum => (
+                        <div key={rowNum}>
+                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+                            Row {rowNum}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {availableByRow[rowNum]
+                              .sort((a, b) => a.plot_position - b.plot_position)
+                              .map(ap => {
+                                const isSelected = selectedDest?.id === ap.id;
+                                return (
+                                  <button
+                                    key={ap.id}
+                                    onClick={() => setSelectedDest(isSelected ? null : ap)}
+                                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                                      isSelected
+                                        ? 'bg-amber-500 text-white border-amber-600 ring-2 ring-amber-300 shadow-sm'
+                                        : 'bg-green-50 text-green-800 border-green-200 hover:bg-green-100 hover:border-green-400'
+                                    }`}
+                                  >
+                                    <div className="font-bold">{ap.plot_number}</div>
+                                    <div className="text-xs opacity-75">Pos {ap.plot_position} · {ap.plot_type}</div>
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected destination confirmation */}
+                {selectedDest && (
+                  <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+                    <h4 className="text-sm font-semibold text-amber-900 mb-3">Confirm Move</h4>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-white rounded-lg border border-amber-200 p-3">
+                        <div className="text-xs text-gray-500 mb-1 uppercase tracking-wide">From (current)</div>
+                        <div className="font-bold text-blue-700 text-base">{plot.plot_number}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Section {plot.section} · Row {plot.row_number} · Pos {plot.plot_position}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5 capitalize">{plot.plot_type}</div>
+                        {plot.deceased_records.length > 0 && (
+                          <div className="text-xs text-gray-600 mt-1 font-medium">
+                            {plot.deceased_records.length} deceased record{plot.deceased_records.length > 1 ? 's' : ''}
+                          </div>
+                        )}
+                      </div>
+                      <div className="bg-white rounded-lg border border-amber-200 p-3">
+                        <div className="text-xs text-gray-500 mb-1 uppercase tracking-wide">To (destination)</div>
+                        <div className="font-bold text-amber-700 text-base">{selectedDest.plot_number}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Section {selectedDest.section} · Row {selectedDest.row_number} · Pos {selectedDest.plot_position}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5 capitalize">{selectedDest.plot_type}</div>
+                        <div className="text-xs text-green-600 mt-1 font-medium">Currently available</div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Reason for move <span className="text-gray-400">(optional — saved in audit log)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={moveNotes}
+                        onChange={e => setMoveNotes(e.target.value)}
+                        placeholder="e.g. Original plot number was entered incorrectly"
+                        className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                      />
+                    </div>
+
+                    {moveError && (
+                      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-3">
+                        {moveError}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setSelectedDest(null)}
+                        className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                        disabled={moving}
+                      >
+                        Choose Different Plot
+                      </button>
+                      <button
+                        onClick={handleConfirmMove}
+                        disabled={moving}
+                        className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-semibold disabled:opacity-50"
+                      >
+                        {moving ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                            Moving...
+                          </span>
+                        ) : (
+                          `✓ Move to ${selectedDest.plot_number}`
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== PLOT DETAILS + RECORDS (always visible) ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Plot Details Card */}
+
+          {/* Left: Plot Details Card */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Plot Details</h2>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-4">Plot Details</h2>
               <dl className="space-y-3">
+                <DetailRow label="Plot Number" value={plot.plot_number} bold />
+                <DetailRow label="Section" value={`Section ${plot.section}`} />
+                <DetailRow label="Row / Position" value={`Row ${plot.row_number}, Position ${plot.plot_position}`} />
+                <DetailRow label="Type" value={<span className="capitalize">{plot.plot_type}</span>} />
                 <div>
-                  <dt className="text-xs font-medium text-gray-500 uppercase">Plot Number</dt>
-                  <dd className="text-sm text-gray-900 mt-1 font-medium">{plot.plot_number}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-gray-500 uppercase">Section</dt>
-                  <dd className="text-sm text-gray-900 mt-1">Section {plot.section}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-gray-500 uppercase">Row / Position</dt>
-                  <dd className="text-sm text-gray-900 mt-1">Row {plot.row_number}, Position {plot.plot_position}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-gray-500 uppercase">Type</dt>
-                  <dd className="text-sm text-gray-900 mt-1 capitalize">{plot.plot_type}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-gray-500 uppercase">Status</dt>
+                  <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide">Status</dt>
                   <dd className="mt-1">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${STATUS_COLORS[plot.status]}`}>
+                    <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${STATUS_COLORS[plot.status]}`}>
                       {plot.status}
                     </span>
                   </dd>
                 </div>
                 {(plot.size_width || plot.size_length) && (
-                  <div>
-                    <dt className="text-xs font-medium text-gray-500 uppercase">Dimensions</dt>
-                    <dd className="text-sm text-gray-900 mt-1">
-                      {plot.size_width && plot.size_length
-                        ? `${plot.size_width} × ${plot.size_length} ft`
-                        : plot.size_width
-                        ? `${plot.size_width} ft wide`
-                        : `${plot.size_length} ft long`}
-                    </dd>
-                  </div>
+                  <DetailRow
+                    label="Dimensions"
+                    value={`${plot.size_width ?? '?'} × ${plot.size_length ?? '?'} ft`}
+                  />
                 )}
                 {plot.price && (
-                  <div>
-                    <dt className="text-xs font-medium text-gray-500 uppercase">Price</dt>
-                    <dd className="text-sm text-gray-900 mt-1">${plot.price.toLocaleString()}</dd>
-                  </div>
+                  <DetailRow label="Price" value={`$${plot.price.toLocaleString()}`} />
                 )}
                 {plot.owner_name && (
-                  <div>
-                    <dt className="text-xs font-medium text-gray-500 uppercase">Owner</dt>
-                    <dd className="text-sm text-gray-900 mt-1">{plot.owner_name}</dd>
-                  </div>
+                  <DetailRow label="Owner" value={plot.owner_name} />
                 )}
                 {plot.owner_contact && (
-                  <div>
-                    <dt className="text-xs font-medium text-gray-500 uppercase">Owner Contact</dt>
-                    <dd className="text-sm text-gray-900 mt-1">{plot.owner_contact}</dd>
-                  </div>
+                  <DetailRow label="Owner Contact" value={plot.owner_contact} />
                 )}
                 {plot.purchase_date && (
-                  <div>
-                    <dt className="text-xs font-medium text-gray-500 uppercase">Purchase Date</dt>
-                    <dd className="text-sm text-gray-900 mt-1">
-                      {new Date(plot.purchase_date).toLocaleDateString()}
-                    </dd>
-                  </div>
+                  <DetailRow
+                    label="Purchase Date"
+                    value={new Date(plot.purchase_date).toLocaleDateString()}
+                  />
                 )}
                 {plot.notes && (
                   <div>
-                    <dt className="text-xs font-medium text-gray-500 uppercase">Notes</dt>
+                    <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide">Notes</dt>
                     <dd className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{plot.notes}</dd>
                   </div>
                 )}
                 <div className="pt-2 border-t border-gray-100">
-                  <dt className="text-xs font-medium text-gray-500 uppercase">Created</dt>
-                  <dd className="text-xs text-gray-500 mt-1">
-                    {new Date(plot.created_at).toLocaleDateString()}
-                  </dd>
+                  <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide">Created</dt>
+                  <dd className="text-xs text-gray-400 mt-1">{new Date(plot.created_at).toLocaleDateString()}</dd>
                 </div>
               </dl>
             </div>
           </div>
 
-          {/* Right Column */}
-          <div className="lg:col-span-2 space-y-6">
+          {/* Right: Deceased Records + Services */}
+          <div className="lg:col-span-2 space-y-5">
+
             {/* Deceased Records */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Deceased Records ({plot.deceased_records?.length || 0})
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900">
+                  Deceased Records
+                  <span className="ml-2 text-sm font-normal text-gray-400">
+                    ({plot.deceased_records?.length || 0})
+                  </span>
                 </h2>
               </div>
               {plot.deceased_records && plot.deceased_records.length > 0 ? (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-50">
                   {plot.deceased_records.map((record) => (
                     <div key={record.id} className="px-6 py-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">
-                            {record.first_name} {record.last_name}
-                            {record.maiden_name && (
-                              <span className="text-gray-500 font-normal"> née {record.maiden_name}</span>
-                            )}
-                          </p>
-                          <div className="mt-1 flex gap-4 text-xs text-gray-500">
-                            {record.birth_date && (
-                              <span>Born: {new Date(record.birth_date).toLocaleDateString()}</span>
-                            )}
-                            {record.death_date && (
-                              <span>Died: {new Date(record.death_date).toLocaleDateString()}</span>
-                            )}
-                            {record.age_at_death && (
-                              <span>Age: {record.age_at_death}</span>
-                            )}
-                          </div>
-                          {record.notes && (
-                            <p className="text-xs text-gray-500 mt-1 italic">{record.notes}</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => {
-                            setMoveTarget(record);
-                            setMoveModalOpen(true);
-                            setMoveSearch('');
-                            setMoveSearchResults([]);
-                            setSelectedNewPlot(null);
-                            setMoveReason('');
-                            setMoveError('');
-                            setMoveSuccess('');
-                          }}
-                          className="ml-4 px-3 py-1 text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors whitespace-nowrap"
-                        >
-                          Move to Another Plot
-                        </button>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {record.first_name} {record.last_name}
+                        {record.maiden_name && (
+                          <span className="text-gray-400 font-normal"> née {record.maiden_name}</span>
+                        )}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
+                        {record.birth_date && (
+                          <span>b. {new Date(record.birth_date).toLocaleDateString()}</span>
+                        )}
+                        {record.death_date && (
+                          <span>d. {new Date(record.death_date).toLocaleDateString()}</span>
+                        )}
+                        {record.age_at_death && (
+                          <span>Age {record.age_at_death}</span>
+                        )}
                       </div>
+                      {record.notes && (
+                        <p className="text-xs text-gray-400 mt-1 italic">{record.notes}</p>
+                      )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="px-6 py-8 text-center text-gray-500">
+                <div className="px-6 py-8 text-center text-gray-400">
                   <p className="text-sm">No deceased records associated with this plot.</p>
                 </div>
               )}
@@ -413,16 +793,17 @@ export default function AdminPlotDetailPage() {
 
             {/* Burial Services */}
             {plot.burial_services && plot.burial_services.length > 0 && (
-              <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Burial Services ({plot.burial_services.length})
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div className="px-6 py-4 border-b border-gray-100">
+                  <h2 className="text-base font-semibold text-gray-900">
+                    Burial Services
+                    <span className="ml-2 text-sm font-normal text-gray-400">({plot.burial_services.length})</span>
                   </h2>
                 </div>
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-50">
                   {plot.burial_services.map((service) => (
                     <div key={service.id} className="px-6 py-4">
-                      <div className="flex gap-4 text-sm text-gray-700">
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-700">
                         {service.service_date && (
                           <span>Date: {new Date(service.service_date).toLocaleDateString()}</span>
                         )}
@@ -434,7 +815,7 @@ export default function AdminPlotDetailPage() {
                         )}
                       </div>
                       {service.notes && (
-                        <p className="text-xs text-gray-500 mt-1">{service.notes}</p>
+                        <p className="text-xs text-gray-400 mt-1">{service.notes}</p>
                       )}
                     </div>
                   ))}
@@ -444,23 +825,24 @@ export default function AdminPlotDetailPage() {
 
             {/* Reservations */}
             {plot.plot_reservations && plot.plot_reservations.length > 0 && (
-              <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Reservations ({plot.plot_reservations.length})
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div className="px-6 py-4 border-b border-gray-100">
+                  <h2 className="text-base font-semibold text-gray-900">
+                    Reservations
+                    <span className="ml-2 text-sm font-normal text-gray-400">({plot.plot_reservations.length})</span>
                   </h2>
                 </div>
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-50">
                   {plot.plot_reservations.map((res) => (
                     <div key={res.id} className="px-6 py-4">
                       <p className="text-sm font-medium text-gray-900">{res.reserved_for || 'Unknown'}</p>
-                      <div className="flex gap-4 text-xs text-gray-500 mt-1">
+                      <div className="flex flex-wrap gap-3 text-xs text-gray-400 mt-1">
                         {res.reservation_date && (
                           <span>Reserved: {new Date(res.reservation_date).toLocaleDateString()}</span>
                         )}
                         {res.contact_info && <span>Contact: {res.contact_info}</span>}
                       </div>
-                      {res.notes && <p className="text-xs text-gray-500 mt-1">{res.notes}</p>}
+                      {res.notes && <p className="text-xs text-gray-400 mt-1">{res.notes}</p>}
                     </div>
                   ))}
                 </div>
@@ -469,100 +851,16 @@ export default function AdminPlotDetailPage() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
 
-      {/* Move to Another Plot Modal (per-occupant) */}
-      {moveModalOpen && moveTarget && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Move Record to Another Plot</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Moving: <strong>{moveTarget.first_name} {moveTarget.last_name}</strong>
-              </p>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              {moveSuccess ? (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-                  ✓ {moveSuccess}
-                </div>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Search for Destination Plot
-                    </label>
-                    <input
-                      type="text"
-                      value={moveSearch}
-                      onChange={(e) => handleMoveSearch(e.target.value)}
-                      placeholder="Enter plot number (e.g. A-001)..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-                    />
-                    {moveSearchLoading && <p className="text-xs text-gray-500 mt-1">Searching...</p>}
-                    {moveSearchResults.length > 0 && !selectedNewPlot && (
-                      <div className="mt-2 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                        {moveSearchResults.map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() => { setSelectedNewPlot(p); setMoveSearch(p.plot_number); setMoveSearchResults([]); }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
-                          >
-                            <span className="font-medium text-emerald-700">{p.plot_number}</span>
-                            <span className="text-gray-500 ml-2">Section {p.section} · {p.plot_type}</span>
-                            <span className={`ml-2 px-1.5 py-0.5 text-xs rounded-full ${STATUS_COLORS[p.status as keyof typeof STATUS_COLORS] || 'bg-gray-100 text-gray-600'}`}>
-                              {p.status}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {selectedNewPlot && (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                      <p className="text-sm font-medium text-emerald-800">Destination: Plot {selectedNewPlot.plot_number}</p>
-                      <p className="text-xs text-emerald-600 mt-0.5">Section {selectedNewPlot.section} · {selectedNewPlot.plot_type} · {selectedNewPlot.status}</p>
-                      <button onClick={() => { setSelectedNewPlot(null); setMoveSearch(''); }} className="text-xs text-emerald-700 underline mt-1">Change</button>
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Reason for Move <span className="text-gray-400">(optional)</span>
-                    </label>
-                    <textarea
-                      value={moveReason}
-                      onChange={(e) => setMoveReason(e.target.value)}
-                      placeholder="e.g. Initial location was entered incorrectly..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm resize-none"
-                    />
-                  </div>
-                  {moveError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{moveError}</div>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => { setMoveModalOpen(false); setMoveTarget(null); setMoveSearch(''); setMoveSearchResults([]); setSelectedNewPlot(null); setMoveReason(''); setMoveError(''); setMoveSuccess(''); }}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
-                disabled={moveLoading}
-              >
-                {moveSuccess ? 'Close' : 'Cancel'}
-              </button>
-              {!moveSuccess && (
-                <button
-                  onClick={handleMoveConfirm}
-                  disabled={!selectedNewPlot || moveLoading}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm"
-                >
-                  {moveLoading ? 'Moving...' : 'Confirm Move'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+// Small helper component for detail rows
+function DetailRow({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</dt>
+      <dd className={`text-sm text-gray-900 mt-0.5 ${bold ? 'font-semibold' : ''}`}>{value}</dd>
     </div>
   );
 }

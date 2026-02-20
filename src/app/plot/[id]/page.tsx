@@ -8,12 +8,15 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { plotsAPI, PlotWithDetails, DeceasedRecord } from '@/lib/supabase';
+import { RELATIONSHIP_GROUPS, getRelationship, deriveOccupantRelationship, getRelationshipCategory } from '@/lib/relationships';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PlotConnection {
   id: string;
   relationship: string;
+  member_relationship?: string;
+  occupant_relationship?: string;
   deceased_records?: { id: string; first_name: string; last_name: string } | null;
 }
 
@@ -29,7 +32,8 @@ function ConnectWithDescendants({
   const { data: session } = useSession();
   const [connections, setConnections] = useState<PlotConnection[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ deceased_id: '', relationship: '', notes: '' });
+  const [form, setForm] = useState({ deceased_id: '', member_relationship: '', notes: '' });
+  const selectedRelDef = getRelationship(form.member_relationship);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -53,8 +57,8 @@ function ConnectWithDescendants({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.relationship.trim()) {
-      setError('Please describe your relationship to the occupant(s).');
+    if (!form.member_relationship.trim()) {
+      setError('Please select your relationship to the occupant(s).');
       return;
     }
     setSubmitting(true);
@@ -66,7 +70,10 @@ function ConnectWithDescendants({
         body: JSON.stringify({
           plot_id: plot.id,
           deceased_id: form.deceased_id || null,
-          relationship: form.relationship,
+          relationship: form.member_relationship,
+          member_relationship: form.member_relationship,
+          occupant_relationship: deriveOccupantRelationship(form.member_relationship),
+          relationship_category: getRelationshipCategory(form.member_relationship),
           notes: form.notes,
         }),
       });
@@ -116,7 +123,10 @@ function ConnectWithDescendants({
               className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-green-900 border border-green-200 dark:border-green-600 rounded-full text-xs text-green-800 dark:text-green-200"
             >
               <span>👤</span>
-              {c.relationship}
+              {(() => {
+                const def = c.member_relationship ? getRelationship(c.member_relationship) : null;
+                return def ? def.inverse : (c.occupant_relationship || c.relationship);
+              })()}
               {c.deceased_records && (
                 <span className="text-green-500 dark:text-green-400">
                   {' '}of {c.deceased_records.first_name} {c.deceased_records.last_name}
@@ -207,19 +217,37 @@ function ConnectWithDescendants({
                 </div>
               )}
 
-              {/* Relationship */}
+              {/* Relationship — structured dropdown */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Your Relationship *
+                  I am the occupant&apos;s… *
                 </label>
-                <input
-                  type="text"
-                  value={form.relationship}
-                  onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))}
+                <select
+                  value={form.member_relationship}
+                  onChange={e => setForm(f => ({ ...f, member_relationship: e.target.value }))}
                   required
-                  placeholder="e.g. Grandson, Great-granddaughter, Niece, Descendant..."
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
+                >
+                  <option value="">— Select your relationship —</option>
+                  {RELATIONSHIP_GROUPS.map(group => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.values.map(rel => (
+                        <option key={rel.value} value={rel.value}>{rel.label}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {/* Live preview of both sides */}
+                {selectedRelDef && (
+                  <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg text-xs space-y-1">
+                    <p className="text-green-800 dark:text-green-200">
+                      <span className="font-semibold">You are:</span> the occupant&apos;s <span className="font-bold">{selectedRelDef.label.replace(' (specify in notes)', '')}</span>
+                    </p>
+                    <p className="text-green-700 dark:text-green-300">
+                      <span className="font-semibold">The occupant is:</span> your <span className="font-bold">{selectedRelDef.inverseLabel}</span>
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Notes */}

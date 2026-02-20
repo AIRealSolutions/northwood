@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getSupabase } from '@/lib/supabase';
+import { writeAuditLog, auditContextFromSession } from '@/lib/audit';
 
 // GET — list connections for a plot (public, approved only) or for the current user
 export async function GET(request: NextRequest) {
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabase
         .from('plot_connections')
         .select(`
-          id, relationship, notes, status, review_notes, created_at,
+          id, relationship, member_relationship, occupant_relationship, relationship_category, notes, status, review_notes, created_at,
           plots ( id, plot_number, section, row_number, plot_position ),
           deceased_records ( id, first_name, middle_name, last_name, birth_date, death_date )
         `)
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabase
         .from('plot_connections')
         .select(`
-          id, relationship,
+          id, relationship, member_relationship, occupant_relationship,
           deceased_records ( id, first_name, last_name )
         `)
         .eq('plot_id', plotId)
@@ -60,9 +61,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { plot_id, deceased_id, relationship, notes } = body;
+    const { plot_id, deceased_id, relationship, member_relationship, occupant_relationship, relationship_category, notes } = body;
 
-    if (!plot_id || !relationship?.trim()) {
+    // Accept either the new structured field or the legacy free-text field
+    const memberRel = (member_relationship || relationship || '').trim();
+    if (!plot_id || !memberRel) {
       return NextResponse.json({ error: 'plot_id and relationship are required' }, { status: 400 });
     }
 
@@ -92,7 +95,10 @@ export async function POST(request: NextRequest) {
         user_id: session.user.id,
         plot_id,
         deceased_id: deceased_id || null,
-        relationship: relationship.trim(),
+        relationship: memberRel,
+        member_relationship: memberRel,
+        occupant_relationship: (occupant_relationship || '').trim() || null,
+        relationship_category: (relationship_category || '').trim() || null,
         notes: notes?.trim() || null,
         status: 'pending',
       })
@@ -100,6 +106,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // Write audit log
+    const ctx = auditContextFromSession(session);
+    await writeAuditLog({
+      table_name: 'plot_connections',
+      record_id: data.id,
+      action: 'CREATE',
+      new_values: { plot_id, deceased_id: deceased_id || null, member_relationship: memberRel, relationship_category: (relationship_category || '').trim() || null },
+      summary: `Family connection request submitted for plot ${plot_id} (${memberRel})`,
+      changed_by_user_id: ctx.userId,
+      changed_by_name: ctx.userName,
+      changed_by_email: ctx.userEmail,
+      changed_by_role: ctx.userRole,
+    });
 
     return NextResponse.json({ connection: data }, { status: 201 });
   } catch (error) {
