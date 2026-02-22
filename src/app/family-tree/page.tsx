@@ -38,61 +38,75 @@ interface LayoutNode extends TreeNode {
 // ─── Layout constants ─────────────────────────────────────────────────────────
 const NODE_W = 160;
 const NODE_H = 72;
-const H_GAP  = 48;   // horizontal gap between sibling nodes
-const V_GAP  = 110;  // vertical gap between generations
+const H_GAP  = 56;   // horizontal gap between sibling nodes
+const V_GAP  = 120;  // vertical gap between generations
 
 // ─── Relationship classification ─────────────────────────────────────────────
-// "downward" means person_a is the PARENT and person_b is the CHILD
+// DOWNWARD: person_a is the PARENT, person_b is the CHILD
 const DOWNWARD_RELS = new Set([
-  'parent',           // person_a is parent of person_b
-  'grandparent',
-  'great_grandparent',
-  'great_great_grandparent',
-  'step_parent',
+  'parent', 'grandparent', 'great_grandparent', 'great_great_grandparent', 'step_parent',
 ]);
-// "upward" means person_a is the CHILD and person_b is the PARENT
+// UPWARD: person_a is the CHILD, person_b is the PARENT
 const UPWARD_RELS = new Set([
-  'child',
-  'grandchild',
-  'great_grandchild',
-  'great_great_grandchild',
-  'step_child',
+  'child', 'grandchild', 'great_grandchild', 'great_great_grandchild', 'step_child',
 ]);
 const SPOUSE_RELS = new Set(['spouse', 'in_law']);
 
-/**
- * Returns the children (downward) of a given node id.
- * person_a -[parent]-> person_b  ⟹  person_b is child of person_a
- * person_a -[child]->  person_b  ⟹  person_b is parent of person_a  (person_a is child)
- */
-function getChildren(nodeId: string, relationships: TreeRelationship[]): string[] {
-  const children: string[] = [];
+// ─── Build parent→children and child→parents maps ────────────────────────────
+function buildAdjacency(nodes: TreeNode[], relationships: TreeRelationship[]) {
+  const nodeIds = new Set(nodes.map(n => n.id));
+  // childrenOf[parentId] = [childId, ...]
+  const childrenOf = new Map<string, string[]>();
+  // parentsOf[childId]  = [parentId, ...]
+  const parentsOf  = new Map<string, string[]>();
+  for (const n of nodes) { childrenOf.set(n.id, []); parentsOf.set(n.id, []); }
+
   for (const rel of relationships) {
-    if (rel.person_a_id === nodeId && DOWNWARD_RELS.has(rel.relationship_type)) {
-      // person_a is parent → person_b is child
-      children.push(rel.person_b_id);
-    } else if (rel.person_b_id === nodeId && UPWARD_RELS.has(rel.relationship_type)) {
-      // person_a is child → person_b (=nodeId) is parent → person_a is child
-      children.push(rel.person_a_id);
-    } else if (rel.person_a_id === nodeId && UPWARD_RELS.has(rel.relationship_type)) {
-      // person_a -[child]-> person_b means person_a IS the child, person_b is parent
-      // so person_b has person_a as a child — handled by the inverse above
-    } else if (rel.person_b_id === nodeId && DOWNWARD_RELS.has(rel.relationship_type)) {
-      // person_a -[parent]-> person_b(=nodeId) means person_a is the parent
-      // so nodeId's children are NOT here
+    if (SPOUSE_RELS.has(rel.relationship_type)) continue;
+    let parentId: string | null = null;
+    let childId:  string | null = null;
+
+    if (DOWNWARD_RELS.has(rel.relationship_type)) {
+      parentId = rel.person_a_id; childId = rel.person_b_id;
+    } else if (UPWARD_RELS.has(rel.relationship_type)) {
+      childId = rel.person_a_id; parentId = rel.person_b_id;
+    }
+
+    if (parentId && childId && nodeIds.has(parentId) && nodeIds.has(childId)) {
+      if (!childrenOf.get(parentId)!.includes(childId))
+        childrenOf.get(parentId)!.push(childId);
+      if (!parentsOf.get(childId)!.includes(parentId))
+        parentsOf.get(childId)!.push(parentId);
     }
   }
-  return children;
+  return { childrenOf, parentsOf };
+}
+
+// ─── Spouse map: spouseOf[id] = [spouseId, ...] ───────────────────────────────
+function buildSpouseMap(nodes: TreeNode[], relationships: TreeRelationship[]) {
+  const spouseOf = new Map<string, string[]>();
+  for (const n of nodes) spouseOf.set(n.id, []);
+  for (const rel of relationships) {
+    if (!SPOUSE_RELS.has(rel.relationship_type)) continue;
+    const a = rel.person_a_id, b = rel.person_b_id;
+    if (!spouseOf.get(a)!.includes(b)) spouseOf.get(a)!.push(b);
+    if (!spouseOf.get(b)!.includes(a)) spouseOf.get(b)!.push(a);
+  }
+  return spouseOf;
 }
 
 /**
- * Reingold-Tilford style recursive layout.
+ * Full top-down hierarchical layout with dual-parent support.
  *
- * 1. Build a spanning tree rooted at `rootId` using parent→child edges.
- * 2. Recursively assign x positions so that each subtree is centred over
- *    its children, and siblings are spaced H_GAP apart.
- * 3. Disconnected nodes (not reachable from root) are placed in a separate
- *    row below the main tree.
+ * Strategy:
+ *  1. Find the true root(s): nodes that have NO parents in the tree.
+ *     If the user has pinned a rootId, use that; otherwise pick the node
+ *     with the most descendants as the primary root.
+ *  2. BFS to assign generation depths (row numbers).
+ *  3. Post-order recursive x-positioning so each parent is centred over
+ *     its children.  When two spouses share children, they are placed
+ *     side-by-side and their children are centred under the couple.
+ *  4. Orphan nodes (disconnected) go in a row below the main tree.
  */
 function buildLayout(
   nodes: TreeNode[],
@@ -102,82 +116,126 @@ function buildLayout(
   if (nodes.length === 0) return [];
 
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
-  const root = (rootId ? nodeMap.get(rootId) : null) ?? nodes[0];
+  const { childrenOf, parentsOf } = buildAdjacency(nodes, relationships);
+  const spouseOf = buildSpouseMap(nodes, relationships);
 
-  // ── Step 1: Build parent→children adjacency, respecting direction ──────────
-  // For the spanning tree we only follow "downward" edges so the tree flows
-  // top-to-bottom.  Spouse edges are drawn separately and don't affect depth.
-  const childrenOf = new Map<string, string[]>();
-  const hasParent   = new Set<string>();
-
-  for (const n of nodes) childrenOf.set(n.id, []);
-
-  for (const rel of relationships) {
-    if (SPOUSE_RELS.has(rel.relationship_type)) continue;
-
-    let parentId: string | null = null;
-    let childId:  string | null = null;
-
-    if (DOWNWARD_RELS.has(rel.relationship_type)) {
-      // person_a is the parent, person_b is the child
-      parentId = rel.person_a_id;
-      childId  = rel.person_b_id;
-    } else if (UPWARD_RELS.has(rel.relationship_type)) {
-      // person_a is the child, person_b is the parent
-      childId  = rel.person_a_id;
-      parentId = rel.person_b_id;
-    }
-
-    if (parentId && childId && nodeMap.has(parentId) && nodeMap.has(childId)) {
-      if (!hasParent.has(childId)) {
-        // Only assign one parent per node to keep it a tree (first wins)
-        childrenOf.get(parentId)!.push(childId);
-        hasParent.add(childId);
+  // ── Step 1: Choose root ───────────────────────────────────────────────────
+  // Prefer the pinned rootId; otherwise use the node with no parents that
+  // has the most descendants (i.e. the oldest known ancestor).
+  let rootNodeId: string;
+  if (rootId && nodeMap.has(rootId)) {
+    rootNodeId = rootId;
+  } else {
+    // Find all nodes with no parents
+    const roots = nodes.filter(n => (parentsOf.get(n.id) ?? []).length === 0);
+    if (roots.length === 0) {
+      rootNodeId = nodes[0].id;
+    } else if (roots.length === 1) {
+      rootNodeId = roots[0].id;
+    } else {
+      // Pick the root with the most descendants
+      function countDesc(id: string, seen = new Set<string>()): number {
+        if (seen.has(id)) return 0;
+        seen.add(id);
+        return (childrenOf.get(id) ?? []).reduce((s, c) => s + 1 + countDesc(c, seen), 0);
       }
+      rootNodeId = roots.reduce((best, n) =>
+        countDesc(n.id) >= countDesc(best.id) ? n : best
+      ).id;
     }
   }
 
-  // ── Step 2: BFS from root to assign depths ────────────────────────────────
-  const depth  = new Map<string, number>();
+  // ── Step 2: BFS to assign depths ─────────────────────────────────────────
+  // Spouses of a node share the same depth.
+  const depth   = new Map<string, number>();
   const visited = new Set<string>();
-  const queue: string[] = [root.id];
-  depth.set(root.id, 0);
-  visited.add(root.id);
+  const bfsQueue: string[] = [rootNodeId];
+  depth.set(rootNodeId, 0);
+  visited.add(rootNodeId);
 
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
+  while (bfsQueue.length > 0) {
+    const cur = bfsQueue.shift()!;
     const d   = depth.get(cur)!;
+
+    // Spread depth to spouses (same generation)
+    for (const sp of spouseOf.get(cur) ?? []) {
+      if (!visited.has(sp)) {
+        visited.add(sp);
+        depth.set(sp, d);
+        bfsQueue.push(sp);
+      }
+    }
+    // Spread depth to children (next generation)
     for (const child of childrenOf.get(cur) ?? []) {
       if (!visited.has(child)) {
         visited.add(child);
         depth.set(child, d + 1);
-        queue.push(child);
+        bfsQueue.push(child);
       }
     }
   }
 
-  // ── Step 3: Recursive x-positioning (post-order) ─────────────────────────
-  // Each leaf gets a unique slot; each internal node is centred over its children.
+  // ── Step 3: Recursive x-positioning ──────────────────────────────────────
+  // We build a "couple unit" concept: if two spouses share children, they
+  // are treated as a single unit and their children are centred under them.
   let leafCounter = 0;
   const xPos = new Map<string, number>();
+  const placed = new Set<string>();
+
+  // Returns all children of a couple (union of both parents' children)
+  function coupleChildren(aId: string, bId: string | null): string[] {
+    const ac = childrenOf.get(aId) ?? [];
+    if (!bId) return ac;
+    const bc = childrenOf.get(bId) ?? [];
+    return [...new Set([...ac, ...bc])];
+  }
 
   function assignX(nodeId: string): void {
-    const children = childrenOf.get(nodeId) ?? [];
+    if (placed.has(nodeId)) return;
+    placed.add(nodeId);
+
+    // Find this node's spouse (first spouse only for layout purposes)
+    const spouses = spouseOf.get(nodeId) ?? [];
+    const spouseId = spouses.length > 0 ? spouses[0] : null;
+
+    // Mark spouse as placed too so we don't double-process
+    if (spouseId) placed.add(spouseId);
+
+    const children = coupleChildren(nodeId, spouseId);
+
     if (children.length === 0) {
-      // Leaf: assign next slot
-      xPos.set(nodeId, leafCounter * (NODE_W + H_GAP));
-      leafCounter++;
+      // Leaf couple (or single leaf)
+      if (spouseId) {
+        // Place as a pair side-by-side
+        xPos.set(nodeId,   leafCounter * (NODE_W + H_GAP));
+        xPos.set(spouseId, leafCounter * (NODE_W + H_GAP) + NODE_W + H_GAP);
+        leafCounter += 2;
+      } else {
+        xPos.set(nodeId, leafCounter * (NODE_W + H_GAP));
+        leafCounter++;
+      }
     } else {
+      // Recurse into children first
       for (const c of children) assignX(c);
+
       const firstX = xPos.get(children[0])!;
       const lastX  = xPos.get(children[children.length - 1])!;
-      xPos.set(nodeId, (firstX + lastX) / 2);
+      const midX   = (firstX + lastX) / 2;
+
+      if (spouseId) {
+        // Centre the couple over their children
+        const coupleSpan = NODE_W + H_GAP; // space between the two parents
+        xPos.set(nodeId,   midX - coupleSpan / 2);
+        xPos.set(spouseId, midX + coupleSpan / 2);
+      } else {
+        xPos.set(nodeId, midX);
+      }
     }
   }
 
-  assignX(root.id);
+  assignX(rootNodeId);
 
-  // ── Step 4: Build LayoutNode list for reachable nodes ────────────────────
+  // ── Step 4: Build LayoutNode list ─────────────────────────────────────────
   const layout: LayoutNode[] = [];
   for (const [id, d] of depth.entries()) {
     const node = nodeMap.get(id)!;
@@ -190,9 +248,9 @@ function buildLayout(
     });
   }
 
-  // ── Step 5: Place disconnected nodes below the main tree ─────────────────
+  // ── Step 5: Orphan nodes below the main tree ──────────────────────────────
   const maxDepth = layout.reduce((m, n) => Math.max(m, n.generation), 0);
-  let orphanCol   = 0;
+  let orphanCol = 0;
   for (const n of nodes) {
     if (!visited.has(n.id)) {
       layout.push({
@@ -207,6 +265,119 @@ function buildLayout(
   }
 
   return layout;
+}
+
+// ─── Compute dual-parent connectors ──────────────────────────────────────────
+// Returns SVG path strings for the "marriage bar + drop to child" connectors.
+// Each entry: { pathD, labelX, labelY, label, isSpouse }
+interface EdgePath {
+  key: string;
+  pathD: string;
+  labelX: number;
+  labelY: number;
+  label: string;
+  isSpouse: boolean;
+}
+
+function buildEdgePaths(
+  layout: LayoutNode[],
+  relationships: TreeRelationship[],
+): EdgePath[] {
+  const layoutMap = new Map(layout.map(n => [n.id, n]));
+  const { childrenOf, parentsOf } = buildAdjacency(layout as TreeNode[], relationships);
+  const spouseOf = buildSpouseMap(layout as TreeNode[], relationships);
+
+  const edges: EdgePath[] = [];
+  const drawnChildren = new Set<string>(); // avoid duplicate child connectors
+
+  // ── Spouse bars ───────────────────────────────────────────────────────────
+  const drawnSpousePairs = new Set<string>();
+  for (const rel of relationships) {
+    if (!SPOUSE_RELS.has(rel.relationship_type)) continue;
+    const pairKey = [rel.person_a_id, rel.person_b_id].sort().join('|');
+    if (drawnSpousePairs.has(pairKey)) continue;
+    drawnSpousePairs.add(pairKey);
+
+    const a = layoutMap.get(rel.person_a_id);
+    const b = layoutMap.get(rel.person_b_id);
+    if (!a || !b) continue;
+
+    // Draw horizontal dashed line between the two spouses at mid-card height
+    const leftNode  = a.x <= b.x ? a : b;
+    const rightNode = a.x <= b.x ? b : a;
+    const midY = leftNode.y + NODE_H / 2;
+    const x1   = leftNode.x  + NODE_W;
+    const x2   = rightNode.x;
+
+    edges.push({
+      key: `spouse-${pairKey}`,
+      pathD: `M ${x1} ${midY} L ${x2} ${midY}`,
+      labelX: (x1 + x2) / 2,
+      labelY: midY - 6,
+      label: rel.relationship_type.replace(/_/g, ' '),
+      isSpouse: true,
+    });
+  }
+
+  // ── Parent→child connectors ───────────────────────────────────────────────
+  for (const [childId, parents] of parentsOf.entries()) {
+    if (parents.length === 0) continue;
+    if (drawnChildren.has(childId)) continue;
+    drawnChildren.add(childId);
+
+    const childNode = layoutMap.get(childId);
+    if (!childNode) continue;
+
+    const childTopX = childNode.x + NODE_W / 2;
+    const childTopY = childNode.y;
+
+    if (parents.length === 1) {
+      // Single parent: simple elbow connector
+      const parentNode = layoutMap.get(parents[0]);
+      if (!parentNode) continue;
+
+      const pBotX = parentNode.x + NODE_W / 2;
+      const pBotY = parentNode.y + NODE_H;
+      const elbowY = pBotY + (childTopY - pBotY) * 0.5;
+
+      edges.push({
+        key: `child-${childId}-single`,
+        pathD: `M ${pBotX} ${pBotY} L ${pBotX} ${elbowY} L ${childTopX} ${elbowY} L ${childTopX} ${childTopY}`,
+        labelX: (pBotX + childTopX) / 2,
+        labelY: elbowY - 4,
+        label: '',
+        isSpouse: false,
+      });
+    } else {
+      // Two parents: find the marriage bar midpoint, then drop a line to child
+      // The marriage bar is already drawn above; we just need the vertical drop.
+      const p1 = layoutMap.get(parents[0]);
+      const p2 = layoutMap.get(parents[1]);
+      if (!p1 || !p2) continue;
+
+      // Midpoint between the two parents at their bottom edge
+      const p1BotX = p1.x + NODE_W / 2;
+      const p2BotX = p2.x + NODE_W / 2;
+      const barMidX = (p1BotX + p2BotX) / 2;
+      // Use the marriage bar Y (mid-card) as the starting horizontal reference
+      const barY    = p1.y + NODE_H / 2;
+      const dropStartY = p1.y + NODE_H; // drop from bottom of parent cards
+      const elbowY  = dropStartY + (childTopY - dropStartY) * 0.5;
+
+      // Path: from marriage bar midpoint down to elbow, then to child top
+      edges.push({
+        key: `child-${childId}-dual`,
+        pathD: `M ${barMidX} ${barY} L ${barMidX} ${elbowY} L ${childTopX} ${elbowY} L ${childTopX} ${childTopY}`,
+        labelX: barMidX,
+        labelY: elbowY - 4,
+        label: '',
+        isSpouse: false,
+      });
+      void dropStartY;
+    }
+  }
+
+  return edges;
 }
 
 // ─── Node card component ──────────────────────────────────────────────────────
@@ -344,8 +515,9 @@ export default function FamilyTreePage() {
     loadTree(searchInput);
   };
 
-  // Build layout
+  // Build layout and edges
   const layout = buildLayout(nodes, relationships, rootId);
+  const edgePaths = buildEdgePaths(layout, relationships);
 
   // Calculate SVG dimensions
   const maxX = layout.reduce((m, n) => Math.max(m, n.x + NODE_W), 0) + H_GAP;
@@ -536,65 +708,31 @@ export default function FamilyTreePage() {
                 onMouseLeave={onMouseUp}
                 onWheel={onWheel}
               >
-                {/* Relationship edges */}
-                {relationships.map(rel => {
-                  const a = layout.find(n => n.id === rel.person_a_id);
-                  const b = layout.find(n => n.id === rel.person_b_id);
-                  if (!a || !b) return null;
-
-                  const isSpouse = SPOUSE_RELS.has(rel.relationship_type);
-                  const sameRow  = Math.abs(a.y - b.y) < 10;
-
-                  // Determine which node is the parent (higher up = smaller y)
-                  const top    = a.y <= b.y ? a : b;
-                  const bottom = a.y <= b.y ? b : a;
-
-                  const topCx    = top.x    + NODE_W / 2;
-                  const topCy    = top.y    + NODE_H;
-                  const bottomCx = bottom.x + NODE_W / 2;
-                  const bottomCy = bottom.y;
-
-                  // Elbow connector: vertical down from parent, then horizontal, then vertical to child
-                  const elbowY = topCy + (bottomCy - topCy) * 0.45;
-
-                  let pathD: string;
-                  if (isSpouse || sameRow) {
-                    // Horizontal link between same-generation nodes
-                    const leftX  = Math.min(a.x + NODE_W, b.x + NODE_W);
-                    const rightX = Math.max(a.x, b.x);
-                    const midX   = (leftX + rightX) / 2;
-                    const midY   = a.y + NODE_H / 2;
-                    pathD = `M ${a.x + NODE_W} ${midY} L ${b.x} ${midY}`;
-                    void midX; // suppress unused warning
-                  } else {
-                    // Elbow: down from parent centre, across, then down to child centre
-                    pathD = `M ${topCx} ${topCy} L ${topCx} ${elbowY} L ${bottomCx} ${elbowY} L ${bottomCx} ${bottomCy}`;
-                  }
-
-                  return (
-                    <g key={rel.id}>
-                      <path
-                        d={pathD}
-                        fill="none"
-                        stroke={isSpouse ? '#f472b6' : '#6ee7b7'}
-                        strokeWidth={1.5}
-                        strokeDasharray={isSpouse ? '5,3' : undefined}
-                        opacity={0.7}
-                      />
-                      {/* Relationship label near midpoint */}
+                {/* Relationship edges — rendered below nodes */}
+                {edgePaths.map(edge => (
+                  <g key={edge.key}>
+                    <path
+                      d={edge.pathD}
+                      fill="none"
+                      stroke={edge.isSpouse ? '#f472b6' : '#6ee7b7'}
+                      strokeWidth={edge.isSpouse ? 2 : 1.5}
+                      strokeDasharray={edge.isSpouse ? '6,4' : undefined}
+                      opacity={0.75}
+                    />
+                    {edge.label && (
                       <text
-                        x={(a.x + NODE_W / 2 + b.x + NODE_W / 2) / 2}
-                        y={isSpouse || sameRow ? a.y + NODE_H / 2 - 6 : elbowY - 4}
+                        x={edge.labelX}
+                        y={edge.labelY}
                         textAnchor="middle"
                         fontSize={9}
                         fill="#9ca3af"
                         fontFamily="system-ui, sans-serif"
                       >
-                        {rel.relationship_type.replace(/_/g, ' ')}
+                        {edge.label}
                       </text>
-                    </g>
-                  );
-                })}
+                    )}
+                  </g>
+                ))}
 
                 {/* Nodes */}
                 {layout.map(node => (
