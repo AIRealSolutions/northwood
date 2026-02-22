@@ -79,10 +79,10 @@ export async function PATCH(
 
     const supabase = getSupabase();
 
-    // Fetch the connection being reviewed
+    // Fetch the connection being reviewed (including family tree back-references)
     const { data: conn, error: connError } = await supabase
       .from('plot_connections')
-      .select('id, user_id, plot_id, status, relationship, member_relationship')
+      .select('id, user_id, plot_id, status, relationship, member_relationship, family_tree_node_id, family_tree_relationship_id')
       .eq('id', id)
       .maybeSingle();
 
@@ -134,6 +134,28 @@ export async function PATCH(
       throw updateError;
     }
 
+    // ── Sync family tree nodes and relationship edge ─────────────────────────
+    // When a connection is approved or rejected, mirror the status change
+    // to the linked family_tree_nodes and family_tree_relationships records.
+    const ftNodeId = (conn as any).family_tree_node_id;
+    const ftRelId  = (conn as any).family_tree_relationship_id;
+
+    if (ftNodeId) {
+      // Only update the living member node status (deceased node is auto-approved)
+      await supabase
+        .from('family_tree_nodes')
+        .update({ status, reviewed_by: session.user.id })
+        .eq('id', ftNodeId)
+        .eq('is_living', true);
+    }
+
+    if (ftRelId) {
+      await supabase
+        .from('family_tree_relationships')
+        .update({ status, reviewed_by: session.user.id })
+        .eq('id', ftRelId);
+    }
+
     // Write audit log
     const ctx = auditContextFromSession(session);
     await writeAuditLog({
@@ -141,8 +163,13 @@ export async function PATCH(
       record_id: id,
       action: status === 'approved' ? 'APPROVE' : 'REJECT',
       old_values: { status: conn.status },
-      new_values: { status, review_notes: review_notes?.trim() || null },
-      summary: `Family connection ${id} ${status} by ${isAdmin ? 'admin' : 'peer family member'}`,
+      new_values: {
+        status,
+        review_notes: review_notes?.trim() || null,
+        family_tree_node_synced: !!ftNodeId,
+        family_tree_relationship_synced: !!ftRelId,
+      },
+      summary: `Family connection ${id} ${status} by ${isAdmin ? 'admin' : 'peer family member'}${ftRelId ? ' — family tree edge synced' : ''}`,
       changed_by_user_id: ctx.userId,
       changed_by_name: ctx.userName,
       changed_by_email: ctx.userEmail,
@@ -152,6 +179,7 @@ export async function PATCH(
     return NextResponse.json({
       connection: updated,
       approval_type: isAdmin ? 'admin' : 'peer_family_member',
+      family_tree_synced: !!(ftNodeId || ftRelId),
     });
 
   } catch (error: any) {

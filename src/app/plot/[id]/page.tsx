@@ -118,31 +118,43 @@ function ConnectWithDescendants({
 
       {/* Existing connections summary */}
       {!loadingConnections && connectionCount > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {connections.map(c => {
-            const memberName = [c.user_first_name, c.user_last_name].filter(Boolean).join(' ');
-            const def = c.member_relationship ? getRelationship(c.member_relationship) : null;
-            // Use def.label (what the member is, e.g. "Grandson") not def.inverse (what the occupant is to them)
-            const relationshipLabel = def ? def.label.replace(/ \(.*?\)/g, '').replace(/ —.*$/, '').trim() : (c.occupant_relationship || c.relationship);
-            return (
-              <span
-                key={c.id}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-green-900 border border-green-200 dark:border-green-600 rounded-full text-xs text-green-800 dark:text-green-200"
-              >
-                <span>👤</span>
-                {memberName && (
-                  <span className="font-semibold">{memberName}</span>
-                )}
-                {memberName && <span className="text-green-400 dark:text-green-500">·</span>}
-                <span>{relationshipLabel}</span>
-                {c.deceased_records && (
-                  <span className="text-green-500 dark:text-green-400">
-                    {' '}of {c.deceased_records.first_name} {c.deceased_records.last_name}
-                  </span>
-                )}
-              </span>
-            );
-          })}
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {connections.map(c => {
+              const memberName = [c.user_first_name, c.user_last_name].filter(Boolean).join(' ');
+              const def = c.member_relationship ? getRelationship(c.member_relationship) : null;
+              // Use def.label (what the member is, e.g. "Grandson") not def.inverse (what the occupant is to them)
+              const relationshipLabel = def ? def.label.replace(/ \(.*?\)/g, '').replace(/ —.*$/, '').trim() : (c.occupant_relationship || c.relationship);
+              return (
+                <span
+                  key={c.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-green-900 border border-green-200 dark:border-green-600 rounded-full text-xs text-green-800 dark:text-green-200"
+                >
+                  <span>👤</span>
+                  {memberName && (
+                    <span className="font-semibold">{memberName}</span>
+                  )}
+                  {memberName && <span className="text-green-400 dark:text-green-500">·</span>}
+                  <span>{relationshipLabel}</span>
+                  {c.deceased_records && (
+                    <span className="text-green-500 dark:text-green-400">
+                      {' '}of {c.deceased_records.first_name} {c.deceased_records.last_name}
+                    </span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+          {/* Link to full family tree view filtered for this plot's deceased */}
+          {deceased.length > 0 && (
+            <Link
+              href={`/family-tree?deceased_id=${deceased[0].id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100 bg-green-100 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-800/60 border border-green-300 dark:border-green-600 px-3 py-1.5 rounded-full transition-colors"
+            >
+              <span>🌳</span>
+              View Family Tree
+            </Link>
+          )}
         </div>
       )}
 
