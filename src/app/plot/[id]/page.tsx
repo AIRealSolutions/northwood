@@ -330,7 +330,9 @@ export default function PlotDetailsPage() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Unknown';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    // Append T00:00:00 to treat the date as local time, preventing UTC offset from shifting the day
+    const normalized = dateString.includes('T') ? dateString : dateString + 'T00:00:00';
+    return new Date(normalized).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -339,8 +341,8 @@ export default function PlotDetailsPage() {
 
   const calculateAge = (birthDate?: string, deathDate?: string) => {
     if (!birthDate || !deathDate) return null;
-    const birth = new Date(birthDate);
-    const death = new Date(deathDate);
+    const birth = new Date(birthDate.includes('T') ? birthDate : birthDate + 'T00:00:00');
+    const death = new Date(deathDate.includes('T') ? deathDate : deathDate + 'T00:00:00');
     let age = death.getFullYear() - birth.getFullYear();
     const monthDiff = death.getMonth() - birth.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && death.getDate() < birth.getDate())) {

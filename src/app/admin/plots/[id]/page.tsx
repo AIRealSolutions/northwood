@@ -443,7 +443,7 @@ export default function AdminPlotDetailPage() {
                   <dl className="space-y-3">
                     {plot.owner_name    && <DRow label="Name"          value={plot.owner_name} />}
                     {plot.owner_contact && <DRow label="Contact"       value={plot.owner_contact} />}
-                    {plot.purchase_date && <DRow label="Purchase Date" value={new Date(plot.purchase_date).toLocaleDateString()} />}
+                    {plot.purchase_date && <DRow label="Purchase Date" value={new Date(plot.purchase_date.includes('T') ? plot.purchase_date : plot.purchase_date + 'T00:00:00').toLocaleDateString()} />}
                   </dl>
                 </div>
               )}
@@ -485,8 +485,8 @@ export default function AdminPlotDetailPage() {
                               {rec.maiden_name && <span className="text-gray-400 font-normal"> (née {rec.maiden_name})</span>}
                             </p>
                             <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
-                              {rec.birth_date && <span>b. {new Date(rec.birth_date).toLocaleDateString()}</span>}
-                              {rec.death_date && <span>d. {new Date(rec.death_date).toLocaleDateString()}</span>}
+                              {rec.birth_date && <span>b. {new Date(rec.birth_date.includes('T') ? rec.birth_date : rec.birth_date + 'T00:00:00').toLocaleDateString()}</span>}
+                              {rec.death_date && <span>d. {new Date(rec.death_date.includes('T') ? rec.death_date : rec.death_date + 'T00:00:00').toLocaleDateString()}</span>}
                               {rec.age_at_death && <span>Age {rec.age_at_death}</span>}
                               {rec.veteran_status && (
                                 <span className="text-blue-600 font-medium">
@@ -538,7 +538,7 @@ export default function AdminPlotDetailPage() {
                       <div key={svc.id} className="px-5 py-4">
                         <p className="text-sm font-medium text-gray-900 capitalize">{svc.service_type || 'Service'}</p>
                         <div className="flex flex-wrap gap-3 text-xs text-gray-400 mt-1">
-                          {svc.service_date && <span>{new Date(svc.service_date).toLocaleDateString()}</span>}
+                          {svc.service_date && <span>{new Date(svc.service_date.includes('T') ? svc.service_date : svc.service_date + 'T00:00:00').toLocaleDateString()}</span>}
                           {svc.funeral_home && <span>{svc.funeral_home}</span>}
                         </div>
                         {svc.notes && <p className="text-xs text-gray-400 mt-1">{svc.notes}</p>}
@@ -562,7 +562,7 @@ export default function AdminPlotDetailPage() {
                       <div key={res.id} className="px-5 py-4">
                         <p className="text-sm font-medium text-gray-900">{res.reserved_for || 'Unknown'}</p>
                         <div className="flex flex-wrap gap-3 text-xs text-gray-400 mt-1">
-                          {res.reservation_date && <span>Reserved: {new Date(res.reservation_date).toLocaleDateString()}</span>}
+                          {res.reservation_date && <span>Reserved: {new Date(res.reservation_date.includes('T') ? res.reservation_date : res.reservation_date + 'T00:00:00').toLocaleDateString()}</span>}
                           {res.contact_info && <span>Contact: {res.contact_info}</span>}
                         </div>
                         {res.notes && <p className="text-xs text-gray-400 mt-1">{res.notes}</p>}

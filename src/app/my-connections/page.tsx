@@ -166,11 +166,11 @@ export default function MyConnectionsPage() {
                       {conn.deceased_records?.birth_date || conn.deceased_records?.death_date ? (
                         <p className="text-xs text-gray-400 mt-0.5">
                           {conn.deceased_records.birth_date
-                            ? new Date(conn.deceased_records.birth_date).getFullYear()
+                            ? new Date(conn.deceased_records.birth_date.includes('T') ? conn.deceased_records.birth_date : conn.deceased_records.birth_date + 'T00:00:00').getFullYear()
                             : '?'}
                           {' – '}
                           {conn.deceased_records.death_date
-                            ? new Date(conn.deceased_records.death_date).getFullYear()
+                            ? new Date(conn.deceased_records.death_date.includes('T') ? conn.deceased_records.death_date : conn.deceased_records.death_date + 'T00:00:00').getFullYear()
                             : '?'}
                         </p>
                       ) : null}
