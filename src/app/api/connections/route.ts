@@ -33,18 +33,36 @@ export async function GET(request: NextRequest) {
     }
 
     if (plotId) {
-      // Public: return approved connections for a plot (only count/names, no personal user info)
-      const { data, error } = await supabase
+      // Public: return approved connections for a plot
+      const { data: connections, error } = await supabase
         .from('plot_connections')
         .select(`
-          id, relationship, member_relationship, occupant_relationship,
+          id, relationship, member_relationship, occupant_relationship, user_id,
           deceased_records ( id, first_name, last_name )
         `)
         .eq('plot_id', plotId)
         .eq('status', 'approved');
 
       if (error) throw error;
-      return NextResponse.json({ connections: data || [] });
+
+      // Fetch user names separately
+      const userIds = [...new Set((connections || []).map((c: any) => c.user_id).filter(Boolean))];
+      let usersMap: Record<string, { first_name: string | null; last_name: string | null }> = {};
+      if (userIds.length > 0) {
+        const { data: users } = await supabase
+          .from('users')
+          .select('id, first_name, last_name')
+          .in('id', userIds);
+        (users || []).forEach((u: any) => { usersMap[u.id] = u; });
+      }
+
+      const enriched = (connections || []).map((c: any) => ({
+        ...c,
+        user_first_name: usersMap[c.user_id]?.first_name || null,
+        user_last_name: usersMap[c.user_id]?.last_name || null,
+      }));
+
+      return NextResponse.json({ connections: enriched });
     }
 
     return NextResponse.json({ error: 'Missing plot_id or mine=true' }, { status: 400 });
