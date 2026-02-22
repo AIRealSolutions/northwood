@@ -1,8 +1,9 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TreeNode {
@@ -472,7 +473,10 @@ function NodeCard({
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-export default function FamilyTreePage() {
+function FamilyTreeInner() {
+  const searchParams = useSearchParams();
+  const deceasedIdParam = searchParams.get('deceased_id');
+
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [relationships, setRelationships] = useState<TreeRelationship[]>([]);
   const [loading, setLoading] = useState(true);
@@ -508,6 +512,16 @@ export default function FamilyTreePage() {
   }, []);
 
   useEffect(() => { loadTree(); }, [loadTree]);
+
+  // Auto-select and center on the node matching deceased_id from URL param
+  useEffect(() => {
+    if (!deceasedIdParam || loading || nodes.length === 0) return;
+    const match = nodes.find(n => n.deceased_id === deceasedIdParam);
+    if (match) {
+      setSelectedNode(match);
+      setRootId(match.id);
+    }
+  }, [deceasedIdParam, loading, nodes]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -881,5 +895,13 @@ export default function FamilyTreePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function FamilyTreePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-gray-500">Loading family tree…</div>}>
+      <FamilyTreeInner />
+    </Suspense>
   );
 }
