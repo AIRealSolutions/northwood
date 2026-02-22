@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getServiceSupabase } from '@/lib/supabase';
+import { writeAuditLog } from '@/lib/audit';
 
-// POST: Submit a relationship between two existing nodes (members only)
+// POST: Submit a relationship between two existing nodes (members only, auto-approved)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     // Require authenticated member
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'You must be signed in to contribute to the family tree.' },
+        { error: 'You must be signed in to contribute to the Community Family Tree.' },
         { status: 401 }
       );
     }
@@ -53,23 +54,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const relData = {
+      person_a_id,
+      person_b_id,
+      relationship_type: relationship_type.trim(),
+      inverse_type: inverse_type?.trim() || null,
+      notes: notes?.trim() || null,
+      submitted_by_user_id: session?.user?.id || null,
+      submitted_by_name: submitted_by_name?.trim() || session.user.name || null,
+      submitted_by_email: submitted_by_email?.trim() || session.user.email || null,
+      status: 'approved', // auto-approve member submissions
+    };
     const { data: rel, error } = await supabase
       .from('family_tree_relationships')
-      .insert({
-        person_a_id,
-        person_b_id,
-        relationship_type: relationship_type.trim(),
-        inverse_type: inverse_type?.trim() || null,
-        notes: notes?.trim() || null,
-        submitted_by_user_id: session?.user?.id || null,
-        submitted_by_name: submitted_by_name?.trim() || null,
-        submitted_by_email: submitted_by_email?.trim() || null,
-        status: 'pending',
-      })
+      .insert(relData)
       .select()
       .single();
 
     if (error) throw error;
+
+    // Log the relationship creation
+    await writeAuditLog({
+      action: 'CREATE',
+      table_name: 'family_tree_relationships',
+      record_id: rel.id,
+      changed_by_user_id: session.user.id,
+      changed_by_name: session.user.name || submitted_by_name || null,
+      changed_by_email: session.user.email || submitted_by_email || null,
+      new_values: relData,
+      summary: `Community Family Tree: ${session.user.name || 'Member'} added relationship ${relationship_type}`,
+    });
+
     return NextResponse.json({ relationship: rel }, { status: 201 });
   } catch (error: any) {
     console.error('Family tree relationship POST error:', error);

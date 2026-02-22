@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getServiceSupabase } from '@/lib/supabase';
+import { writeAuditLog } from '@/lib/audit';
 
 // ─── GET: Fetch the full approved family tree ─────────────────────────────────
 // Optionally scoped to a deceased_id to get just that person's tree
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ─── POST: Submit a new node + optional relationship (members only) ──────────
+// ─── POST: Submit a new node + optional relationship (members only, auto-approved) ──
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     // Require authenticated member
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'You must be signed in to contribute to the family tree.' },
+        { error: 'You must be signed in to contribute to the Community Family Tree.' },
         { status: 401 }
       );
     }
@@ -115,50 +116,76 @@ export async function POST(request: NextRequest) {
 
     const supabase = getServiceSupabase();
 
-    // ── Insert the new node ──────────────────────────────────────────────────
+    // ── Insert the new node (auto-approved for members) ──────────────────────
+    const nodeData = {
+      deceased_id: deceased_id || null,
+      first_name: first_name.trim(),
+      middle_name: middle_name?.trim() || null,
+      last_name: last_name.trim(),
+      maiden_name: maiden_name?.trim() || null,
+      birth_year: birth_year || null,
+      death_year: death_year || null,
+      is_living: is_living !== false,
+      gender: gender || 'unknown',
+      submitted_by_user_id: session?.user?.id || null,
+      submitted_by_name: submitted_by_name?.trim() || session.user.name || null,
+      submitted_by_email: submitted_by_email?.trim() || session.user.email || null,
+      status: 'approved', // auto-approve all approved member submissions
+    };
     const { data: node, error: nodeError } = await supabase
       .from('family_tree_nodes')
-      .insert({
-        deceased_id: deceased_id || null,
-        first_name: first_name.trim(),
-        middle_name: middle_name?.trim() || null,
-        last_name: last_name.trim(),
-        maiden_name: maiden_name?.trim() || null,
-        birth_year: birth_year || null,
-        death_year: death_year || null,
-        is_living: is_living !== false,
-        gender: gender || 'unknown',
-        submitted_by_user_id: session?.user?.id || null,
-        submitted_by_name: submitted_by_name?.trim() || null,
-        submitted_by_email: submitted_by_email?.trim() || null,
-        status: 'pending',
-      })
+      .insert(nodeData)
       .select()
       .single();
 
     if (nodeError) throw nodeError;
 
-    // ── Insert relationship if requested ─────────────────────────────────────
+    // Log the node creation
+    await writeAuditLog({
+      action: 'CREATE',
+      table_name: 'family_tree_nodes',
+      record_id: node.id,
+      changed_by_user_id: session.user.id,
+      changed_by_name: session.user.name || submitted_by_name || null,
+      changed_by_email: session.user.email || submitted_by_email || null,
+      new_values: nodeData,
+      summary: `Community Family Tree: ${session.user.name || 'Member'} added person ${first_name.trim()} ${last_name.trim()}`,
+    });
+
+    // ── Insert relationship if requested (auto-approved) ─────────────────────
     let relationship = null;
     if (relate_to_node_id && relationship_type) {
+      const relData = {
+        person_a_id: node.id,
+        person_b_id: relate_to_node_id,
+        relationship_type: relationship_type.trim(),
+        inverse_type: inverse_type?.trim() || null,
+        notes: notes?.trim() || null,
+        submitted_by_user_id: session?.user?.id || null,
+        submitted_by_name: submitted_by_name?.trim() || session.user.name || null,
+        submitted_by_email: submitted_by_email?.trim() || session.user.email || null,
+        status: 'approved', // auto-approve
+      };
       const { data: rel, error: relError } = await supabase
         .from('family_tree_relationships')
-        .insert({
-          person_a_id: node.id,
-          person_b_id: relate_to_node_id,
-          relationship_type: relationship_type.trim(),
-          inverse_type: inverse_type?.trim() || null,
-          notes: notes?.trim() || null,
-          submitted_by_user_id: session?.user?.id || null,
-          submitted_by_name: submitted_by_name?.trim() || null,
-          submitted_by_email: submitted_by_email?.trim() || null,
-          status: 'pending',
-        })
+        .insert(relData)
         .select()
         .single();
 
       if (relError) throw relError;
       relationship = rel;
+
+      // Log the relationship creation
+      await writeAuditLog({
+        action: 'CREATE',
+        table_name: 'family_tree_relationships',
+        record_id: rel.id,
+        changed_by_user_id: session.user.id,
+        changed_by_name: session.user.name || submitted_by_name || null,
+        changed_by_email: session.user.email || submitted_by_email || null,
+        new_values: relData,
+        summary: `Community Family Tree: ${session.user.name || 'Member'} linked ${first_name.trim()} ${last_name.trim()} as ${relationship_type}`,
+      });
     }
 
     return NextResponse.json({ node, relationship }, { status: 201 });
