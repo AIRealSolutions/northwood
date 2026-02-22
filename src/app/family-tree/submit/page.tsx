@@ -75,7 +75,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function FamilyTreeSubmitPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
 
   // Step 1: Choose anchor (deceased person already in cemetery)
   const [step, setStep] = useState(1);
@@ -101,9 +101,7 @@ export default function FamilyTreeSubmitPage() {
   const [relationshipType, setRelationshipType] = useState('');
   const [relNotes, setRelNotes] = useState('');
 
-  // Submitter info (for guests)
-  const [submitterName, setSubmitterName] = useState('');
-  const [submitterEmail, setSubmitterEmail] = useState('');
+  // (Guest submitter fields removed — members only)
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -177,8 +175,8 @@ export default function FamilyTreeSubmitPage() {
             middle_name: anchorDeceased.middle_name || '',
             last_name: anchorDeceased.last_name,
             is_living: false,
-            submitted_by_name: submitterName || session?.user?.name || '',
-            submitted_by_email: submitterEmail || session?.user?.email || '',
+            submitted_by_name: session?.user?.name || '',
+            submitted_by_email: session?.user?.email || '',
           }),
         });
         const anchorData = await anchorRes.json();
@@ -199,8 +197,8 @@ export default function FamilyTreeSubmitPage() {
           death_year: personForm.death_year ? parseInt(personForm.death_year) : undefined,
           is_living: personForm.is_living,
           gender: personForm.gender,
-          submitted_by_name: submitterName || session?.user?.name || '',
-          submitted_by_email: submitterEmail || session?.user?.email || '',
+          submitted_by_name: session?.user?.name || '',
+          submitted_by_email: session?.user?.email || '',
           // Relationship to anchor
           relate_to_node_id: anchorNodeId,
           relationship_type: relationshipType,
@@ -249,6 +247,47 @@ export default function FamilyTreeSubmitPage() {
     );
   }
 
+  // ── Login wall: require authenticated member ──────────────────────────────────────────
+  if (sessionStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <p className="text-gray-500 dark:text-gray-400 text-sm">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-10 max-w-md w-full text-center shadow-sm">
+          <div className="text-5xl mb-4">🌳</div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Members Only</h2>
+          <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+            You must be a registered member to contribute to the Northwood family tree.
+            Please sign in or create a free account to continue.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              href="/auth/login?callbackUrl=/family-tree/submit"
+              className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl text-sm transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/auth/register?callbackUrl=/family-tree/submit"
+              className="px-5 py-2.5 bg-white dark:bg-gray-700 hover:bg-gray-50 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-xl text-sm transition-colors"
+            >
+              Create Free Account
+            </Link>
+          </div>
+          <Link href="/family-tree" className="mt-5 inline-block text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+            ← Back to Family Tree
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
@@ -269,6 +308,7 @@ export default function FamilyTreeSubmitPage() {
             <strong>Help build the Northwood family tree.</strong> Connect living family members and
             other deceased relatives to people already in the cemetery. All submissions are reviewed
             by the cemetery committee before appearing publicly.
+            Submitting as <strong>{session.user?.name || session.user?.email}</strong>.
           </p>
         </div>
 
@@ -576,30 +616,12 @@ export default function FamilyTreeSubmitPage() {
                 />
               </div>
 
-              {/* Submitter info for guests */}
-              {!session && (
-                <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-3">
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Your Contact Info (optional, for follow-up)
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      value={submitterName}
-                      onChange={e => setSubmitterName(e.target.value)}
-                      placeholder="Your name"
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                    <input
-                      type="email"
-                      value={submitterEmail}
-                      onChange={e => setSubmitterEmail(e.target.value)}
-                      placeholder="Your email"
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Member identity confirmation */}
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Submitting as <strong className="text-gray-700 dark:text-gray-300">{session.user?.name || session.user?.email}</strong>
+                </p>
+              </div>
 
               {error && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">

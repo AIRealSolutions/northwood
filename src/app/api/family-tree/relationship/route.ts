@@ -3,10 +3,19 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getServiceSupabase } from '@/lib/supabase';
 
-// POST: Submit a relationship between two existing nodes
+// POST: Submit a relationship between two existing nodes (members only)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+
+    // Require authenticated member
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'You must be signed in to contribute to the family tree.' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const {
