@@ -226,8 +226,7 @@ export async function POST(request: NextRequest) {
     const derivedCategory = relDef ? relDef.category : (relationship_category || '').trim() || null;
 
     // ── Determine submitter info from session ─────────────────────────────────
-    const submitterName = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ')
-      || session.user.name
+    const submitterName = session.user.name
       || session.user.email
       || 'Unknown';
     const submitterEmail = session.user.email || '';
