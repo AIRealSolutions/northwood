@@ -122,7 +122,8 @@ function ConnectWithDescendants({
           {connections.map(c => {
             const memberName = [c.user_first_name, c.user_last_name].filter(Boolean).join(' ');
             const def = c.member_relationship ? getRelationship(c.member_relationship) : null;
-            const relationshipLabel = def ? def.inverse : (c.occupant_relationship || c.relationship);
+            // Use def.label (what the member is, e.g. "Grandson") not def.inverse (what the occupant is to them)
+            const relationshipLabel = def ? def.label.replace(/ \(.*?\)/g, '').replace(/ —.*$/, '').trim() : (c.occupant_relationship || c.relationship);
             return (
               <span
                 key={c.id}
