@@ -32,21 +32,21 @@ interface TreeNode {
 
 // ─── Relationship options ─────────────────────────────────────────────────────
 const RELATIONSHIP_OPTIONS = [
-  { value: 'parent',          label: 'Parent (Father / Mother)',    inverse: 'child' },
-  { value: 'child',           label: 'Child (Son / Daughter)',      inverse: 'parent' },
-  { value: 'spouse',          label: 'Spouse / Partner',            inverse: 'spouse' },
-  { value: 'sibling',         label: 'Sibling',                     inverse: 'sibling' },
-  { value: 'grandparent',     label: 'Grandparent',                 inverse: 'grandchild' },
-  { value: 'grandchild',      label: 'Grandchild',                  inverse: 'grandparent' },
-  { value: 'great_grandparent', label: 'Great-Grandparent',         inverse: 'great_grandchild' },
-  { value: 'great_grandchild', label: 'Great-Grandchild',           inverse: 'great_grandparent' },
-  { value: 'aunt_uncle',      label: 'Aunt / Uncle',                inverse: 'nephew_niece' },
-  { value: 'nephew_niece',    label: 'Nephew / Niece',              inverse: 'aunt_uncle' },
-  { value: 'first_cousin',    label: '1st Cousin',                  inverse: 'first_cousin' },
-  { value: 'step_parent',     label: 'Step-Parent',                 inverse: 'step_child' },
-  { value: 'step_child',      label: 'Step-Child',                  inverse: 'step_parent' },
-  { value: 'in_law',          label: 'In-Law',                      inverse: 'in_law' },
-  { value: 'other',           label: 'Other (describe in notes)',   inverse: 'other' },
+  { value: 'spouse',              label: 'Spouse / Partner',            inverse: 'spouse' },
+  { value: 'parent',              label: 'Parent (Father / Mother)',    inverse: 'child' },
+  { value: 'child',               label: 'Child (Son / Daughter)',      inverse: 'parent' },
+  { value: 'sibling',             label: 'Sibling',                     inverse: 'sibling' },
+  { value: 'grandparent',         label: 'Grandparent',                 inverse: 'grandchild' },
+  { value: 'grandchild',          label: 'Grandchild',                  inverse: 'grandparent' },
+  { value: 'great_grandparent',   label: 'Great-Grandparent',           inverse: 'great_grandchild' },
+  { value: 'great_grandchild',    label: 'Great-Grandchild',            inverse: 'great_grandparent' },
+  { value: 'aunt_uncle',          label: 'Aunt / Uncle',                inverse: 'nephew_niece' },
+  { value: 'nephew_niece',        label: 'Nephew / Niece',              inverse: 'aunt_uncle' },
+  { value: 'first_cousin',        label: '1st Cousin',                  inverse: 'first_cousin' },
+  { value: 'step_parent',         label: 'Step-Parent',                 inverse: 'step_child' },
+  { value: 'step_child',          label: 'Step-Child',                  inverse: 'step_parent' },
+  { value: 'in_law',              label: 'In-Law',                      inverse: 'in_law' },
+  { value: 'other',               label: 'Other (describe in notes)',   inverse: 'other' },
 ];
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -85,7 +85,10 @@ export default function FamilyTreeSubmitPage() {
   const [anchorDeceased, setAnchorDeceased] = useState<DeceasedRecord | null>(null);
   const [anchorNode, setAnchorNode] = useState<TreeNode | null>(null);
 
-  // Step 2: Add person being related
+  // Step 2 mode: 'new' = enter details manually, 'existing' = pick another occupant
+  const [step2Mode, setStep2Mode] = useState<'new' | 'existing'>('new');
+
+  // Step 2 — new person form
   const [personForm, setPersonForm] = useState({
     first_name: '',
     middle_name: '',
@@ -97,18 +100,23 @@ export default function FamilyTreeSubmitPage() {
     gender: 'unknown',
   });
 
+  // Step 2 — existing occupant search
+  const [occupantSearch, setOccupantSearch] = useState('');
+  const [occupantResults, setOccupantResults] = useState<DeceasedRecord[]>([]);
+  const [searchingOccupant, setSearchingOccupant] = useState(false);
+  const [selectedOccupant, setSelectedOccupant] = useState<DeceasedRecord | null>(null);
+  const [selectedOccupantNode, setSelectedOccupantNode] = useState<TreeNode | null>(null);
+
   // Step 3: Relationship
   const [relationshipType, setRelationshipType] = useState('');
   const [relNotes, setRelNotes] = useState('');
-
-  // (Guest submitter fields removed — members only)
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  // ── Search deceased records ──────────────────────────────────────────────────
+  // ── Search deceased records (anchor) ─────────────────────────────────────────
   const searchDeceased = useCallback(async (term: string) => {
     if (term.length < 2) { setDeceasedResults([]); return; }
     setSearchingDeceased(true);
@@ -128,12 +136,32 @@ export default function FamilyTreeSubmitPage() {
     return () => clearTimeout(t);
   }, [deceasedSearch, searchDeceased]);
 
+  // ── Search occupants (for existing-occupant mode) ─────────────────────────────
+  const searchOccupant = useCallback(async (term: string) => {
+    if (term.length < 2) { setOccupantResults([]); return; }
+    setSearchingOccupant(true);
+    try {
+      const res = await fetch(`/api/family-tree/search-deceased?q=${encodeURIComponent(term)}`);
+      const data = await res.json();
+      // Exclude the anchor person from results
+      setOccupantResults((data.records || []).filter((r: DeceasedRecord) => r.id !== anchorDeceased?.id));
+    } catch {
+      setOccupantResults([]);
+    } finally {
+      setSearchingOccupant(false);
+    }
+  }, [anchorDeceased?.id]);
+
+  useEffect(() => {
+    const t = setTimeout(() => searchOccupant(occupantSearch), 300);
+    return () => clearTimeout(t);
+  }, [occupantSearch, searchOccupant]);
+
   // ── Select anchor deceased ────────────────────────────────────────────────────
   const selectAnchor = async (record: DeceasedRecord) => {
     setAnchorDeceased(record);
     setDeceasedResults([]);
     setDeceasedSearch('');
-    // Check if a tree node already exists for this deceased person
     try {
       const res = await fetch(`/api/family-tree/node-for-deceased?deceased_id=${record.id}`);
       const data = await res.json();
@@ -144,11 +172,36 @@ export default function FamilyTreeSubmitPage() {
     setStep(2);
   };
 
+  // ── Select existing occupant ──────────────────────────────────────────────────
+  const selectOccupant = async (record: DeceasedRecord) => {
+    setSelectedOccupant(record);
+    setOccupantResults([]);
+    setOccupantSearch('');
+    try {
+      const res = await fetch(`/api/family-tree/node-for-deceased?deceased_id=${record.id}`);
+      const data = await res.json();
+      setSelectedOccupantNode(data.node || null);
+    } catch {
+      setSelectedOccupantNode(null);
+    }
+  };
+
+  // ── Derived display name for the "related person" ─────────────────────────────
+  const relatedPersonName =
+    step2Mode === 'existing' && selectedOccupant
+      ? `${selectedOccupant.first_name} ${selectedOccupant.last_name}`
+      : `${personForm.first_name} ${personForm.last_name}`.trim();
+
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!anchorDeceased) return;
-    if (!personForm.first_name.trim() || !personForm.last_name.trim()) {
+
+    if (step2Mode === 'existing' && !selectedOccupant) {
+      setError('Please select the existing cemetery occupant to connect.');
+      return;
+    }
+    if (step2Mode === 'new' && (!personForm.first_name.trim() || !personForm.last_name.trim())) {
       setError('Please enter the first and last name of the person being added.');
       return;
     }
@@ -156,16 +209,16 @@ export default function FamilyTreeSubmitPage() {
       setError('Please select the relationship type.');
       return;
     }
+
     setSubmitting(true);
     setError('');
 
     try {
       const relDef = RELATIONSHIP_OPTIONS.find(r => r.value === relationshipType);
 
-      // Step A: Ensure anchor node exists
+      // ── Step A: Ensure anchor node exists ────────────────────────────────────
       let anchorNodeId = anchorNode?.id;
       if (!anchorNodeId) {
-        // Create a node for the anchor deceased
         const anchorRes = await fetch('/api/family-tree', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -184,31 +237,71 @@ export default function FamilyTreeSubmitPage() {
         anchorNodeId = anchorData.node.id;
       }
 
-      // Step B: Create the new person node + relationship in one call
-      const res = await fetch('/api/family-tree', {
+      // ── Step B: Ensure related-person node exists ─────────────────────────────
+      let relatedNodeId: string;
+
+      if (step2Mode === 'existing' && selectedOccupant) {
+        // Use or create a node for the existing occupant
+        let existingNodeId = selectedOccupantNode?.id;
+        if (!existingNodeId) {
+          const occRes = await fetch('/api/family-tree', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              deceased_id: selectedOccupant.id,
+              first_name: selectedOccupant.first_name,
+              middle_name: selectedOccupant.middle_name || '',
+              last_name: selectedOccupant.last_name,
+              is_living: false,
+              submitted_by_name: session?.user?.name || '',
+              submitted_by_email: session?.user?.email || '',
+            }),
+          });
+          const occData = await occRes.json();
+          if (!occRes.ok) throw new Error(occData.error || 'Failed to create occupant node');
+          existingNodeId = occData.node.id;
+        }
+        relatedNodeId = existingNodeId!;
+      } else {
+        // Create a brand-new person node
+        const newPersonRes = await fetch('/api/family-tree', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: personForm.first_name.trim(),
+            middle_name: personForm.middle_name.trim() || undefined,
+            last_name: personForm.last_name.trim(),
+            maiden_name: personForm.maiden_name.trim() || undefined,
+            birth_year: personForm.birth_year ? parseInt(personForm.birth_year) : undefined,
+            death_year: personForm.death_year ? parseInt(personForm.death_year) : undefined,
+            is_living: personForm.is_living,
+            gender: personForm.gender,
+            submitted_by_name: session?.user?.name || '',
+            submitted_by_email: session?.user?.email || '',
+          }),
+        });
+        const newPersonData = await newPersonRes.json();
+        if (!newPersonRes.ok) throw new Error(newPersonData.error || 'Failed to create person node');
+        relatedNodeId = newPersonData.node.id;
+      }
+
+      // ── Step C: Create the relationship ──────────────────────────────────────
+      const relRes = await fetch('/api/family-tree/relationship', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          first_name: personForm.first_name.trim(),
-          middle_name: personForm.middle_name.trim() || undefined,
-          last_name: personForm.last_name.trim(),
-          maiden_name: personForm.maiden_name.trim() || undefined,
-          birth_year: personForm.birth_year ? parseInt(personForm.birth_year) : undefined,
-          death_year: personForm.death_year ? parseInt(personForm.death_year) : undefined,
-          is_living: personForm.is_living,
-          gender: personForm.gender,
-          submitted_by_name: session?.user?.name || '',
-          submitted_by_email: session?.user?.email || '',
-          // Relationship to anchor
-          relate_to_node_id: anchorNodeId,
+          person_a_id: relatedNodeId,
+          person_b_id: anchorNodeId,
           relationship_type: relationshipType,
           inverse_type: relDef?.inverse || '',
           notes: relNotes.trim() || undefined,
+          submitted_by_name: session?.user?.name || '',
+          submitted_by_email: session?.user?.email || '',
         }),
       });
+      const relData = await relRes.json();
+      if (!relRes.ok) throw new Error(relData.error || 'Failed to create relationship');
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Submission failed');
       setSubmitted(true);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -217,7 +310,23 @@ export default function FamilyTreeSubmitPage() {
     }
   };
 
-  // ─── Submitted success screen ─────────────────────────────────────────────
+  // ── Reset all state ───────────────────────────────────────────────────────────
+  const resetAll = () => {
+    setSubmitted(false);
+    setStep(1);
+    setAnchorDeceased(null);
+    setAnchorNode(null);
+    setStep2Mode('new');
+    setPersonForm({ first_name: '', middle_name: '', last_name: '', maiden_name: '', birth_year: '', death_year: '', is_living: true, gender: 'unknown' });
+    setSelectedOccupant(null);
+    setSelectedOccupantNode(null);
+    setOccupantSearch('');
+    setRelationshipType('');
+    setRelNotes('');
+    setError('');
+  };
+
+  // ─── Submitted success screen ─────────────────────────────────────────────────
   if (submitted) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
@@ -230,10 +339,10 @@ export default function FamilyTreeSubmitPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
-              onClick={() => { setSubmitted(false); setStep(1); setAnchorDeceased(null); setAnchorNode(null); setPersonForm({ first_name: '', middle_name: '', last_name: '', maiden_name: '', birth_year: '', death_year: '', is_living: true, gender: 'unknown' }); setRelationshipType(''); setRelNotes(''); }}
+              onClick={resetAll}
               className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl text-sm transition-colors"
             >
-              Add Another Person
+              Add Another Connection
             </button>
             <Link
               href="/family-tree"
@@ -247,7 +356,7 @@ export default function FamilyTreeSubmitPage() {
     );
   }
 
-  // ── Login wall: require authenticated member ──────────────────────────────────────────
+  // ── Login wall ────────────────────────────────────────────────────────────────
   if (sessionStatus === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -305,8 +414,8 @@ export default function FamilyTreeSubmitPage() {
         {/* Info banner */}
         <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-4 mb-6">
           <p className="text-sm text-emerald-800 dark:text-emerald-200">
-            <strong>Help build the Northwood family tree.</strong> Connect living family members and
-            other deceased relatives to people already in the cemetery. All submissions are reviewed
+            <strong>Help build the Northwood family tree.</strong> Connect cemetery occupants to each
+            other (e.g., husband &amp; wife) or to living family members. All submissions are reviewed
             by the cemetery committee before appearing publicly.
             Submitting as <strong>{session.user?.name || session.user?.email}</strong>.
           </p>
@@ -322,7 +431,7 @@ export default function FamilyTreeSubmitPage() {
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
               Search for the person already buried at Northwood Cemetery that you want to connect a
-              family member to.
+              relative to.
             </p>
             <div className="relative">
               <input
@@ -368,7 +477,7 @@ export default function FamilyTreeSubmitPage() {
           </div>
         )}
 
-        {/* ── Step 2: Add the family member ── */}
+        {/* ── Step 2: Who are they related to? ── */}
         {step === 2 && anchorDeceased && (
           <div className="space-y-5">
             {/* Anchor card */}
@@ -396,131 +505,240 @@ export default function FamilyTreeSubmitPage() {
               </button>
             </div>
 
+            {/* Mode toggle */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
-                Step 2: Enter the Family Member&apos;s Details
+                Step 2: Who Are They Related To?
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-                This can be a living relative or another deceased person not yet in the system.
+                Choose whether you are connecting to another person already buried at Northwood, or
+                adding a new person (living or deceased).
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={personForm.first_name}
-                    onChange={e => setPersonForm(f => ({ ...f, first_name: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="First name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Middle Name
-                  </label>
-                  <input
-                    type="text"
-                    value={personForm.middle_name}
-                    onChange={e => setPersonForm(f => ({ ...f, middle_name: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Middle name (optional)"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={personForm.last_name}
-                    onChange={e => setPersonForm(f => ({ ...f, last_name: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Last name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Maiden Name
-                  </label>
-                  <input
-                    type="text"
-                    value={personForm.maiden_name}
-                    onChange={e => setPersonForm(f => ({ ...f, maiden_name: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Maiden name (optional)"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Birth Year
-                  </label>
-                  <input
-                    type="number"
-                    value={personForm.birth_year}
-                    onChange={e => setPersonForm(f => ({ ...f, birth_year: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="e.g. 1945"
-                    min="1800"
-                    max={new Date().getFullYear()}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Death Year
-                    <span className="text-gray-400 font-normal ml-1">(leave blank if living)</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={personForm.death_year}
-                    onChange={e => setPersonForm(f => ({ ...f, death_year: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="e.g. 2010"
-                    min="1800"
-                    max={new Date().getFullYear()}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Gender
-                  </label>
-                  <select
-                    value={personForm.gender}
-                    onChange={e => setPersonForm(f => ({ ...f, gender: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  >
-                    <option value="unknown">Unknown / Prefer not to say</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-3 pt-5">
-                  <input
-                    type="checkbox"
-                    id="is_living"
-                    checked={personForm.is_living}
-                    onChange={e => setPersonForm(f => ({ ...f, is_living: e.target.checked }))}
-                    className="w-4 h-4 text-emerald-600 rounded"
-                  />
-                  <label htmlFor="is_living" className="text-sm text-gray-700 dark:text-gray-300">
-                    This person is living
-                  </label>
-                </div>
+              {/* Toggle buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                <button
+                  type="button"
+                  onClick={() => { setStep2Mode('existing'); setPersonForm({ first_name: '', middle_name: '', last_name: '', maiden_name: '', birth_year: '', death_year: '', is_living: true, gender: 'unknown' }); setError(''); }}
+                  className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                    step2Mode === 'existing'
+                      ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20'
+                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                  }`}
+                >
+                  <span className="text-2xl mt-0.5">⚰</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                      Another Cemetery Occupant
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      e.g. husband, wife, sibling already buried at Northwood
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setStep2Mode('new'); setSelectedOccupant(null); setSelectedOccupantNode(null); setOccupantSearch(''); setError(''); }}
+                  className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                    step2Mode === 'new'
+                      ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20'
+                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                  }`}
+                >
+                  <span className="text-2xl mt-0.5">👤</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                      Add a New Person
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      A living family member or a deceased person not yet in the system
+                    </p>
+                  </div>
+                </button>
               </div>
 
-              <div className="mt-5 flex gap-3">
+              {/* ── Existing occupant search ── */}
+              {step2Mode === 'existing' && (
+                <div className="space-y-4">
+                  {selectedOccupant ? (
+                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-xl px-4 py-3 border border-gray-200 dark:border-gray-600">
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                          {selectedOccupant.first_name} {selectedOccupant.last_name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {selectedOccupant.birth_date ? new Date(selectedOccupant.birth_date + 'T00:00:00').getFullYear() : '?'}
+                          {' – '}
+                          {selectedOccupant.death_date ? new Date(selectedOccupant.death_date + 'T00:00:00').getFullYear() : '?'}
+                          {selectedOccupant.plots ? ` · Plot ${selectedOccupant.plots.plot_number}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { setSelectedOccupant(null); setSelectedOccupantNode(null); }}
+                        className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={occupantSearch}
+                        onChange={e => setOccupantSearch(e.target.value)}
+                        placeholder="Search for the other occupant by name…"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        autoFocus
+                      />
+                      {searchingOccupant && (
+                        <div className="absolute right-3 top-3 text-gray-400 text-xs">Searching…</div>
+                      )}
+                      {occupantResults.length > 0 && (
+                        <div className="mt-2 border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden shadow-sm">
+                          {occupantResults.map(r => (
+                            <button
+                              key={r.id}
+                              onClick={() => selectOccupant(r)}
+                              className="w-full text-left px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors"
+                            >
+                              <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                {r.first_name} {r.middle_name ? `${r.middle_name} ` : ''}{r.last_name}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {r.birth_date ? new Date(r.birth_date + 'T00:00:00').getFullYear() : '?'}
+                                {' – '}
+                                {r.death_date ? new Date(r.death_date + 'T00:00:00').getFullYear() : '?'}
+                                {r.plots ? ` · Plot ${r.plots.plot_number} (Section ${r.plots.section})` : ''}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {occupantSearch.length >= 2 && !searchingOccupant && occupantResults.length === 0 && (
+                        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                          No records found for &ldquo;{occupantSearch}&rdquo;.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── New person form ── */}
+              {step2Mode === 'new' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">First Name *</label>
+                    <input
+                      type="text"
+                      value={personForm.first_name}
+                      onChange={e => setPersonForm(f => ({ ...f, first_name: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Middle Name</label>
+                    <input
+                      type="text"
+                      value={personForm.middle_name}
+                      onChange={e => setPersonForm(f => ({ ...f, middle_name: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="Middle name (optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name *</label>
+                    <input
+                      type="text"
+                      value={personForm.last_name}
+                      onChange={e => setPersonForm(f => ({ ...f, last_name: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="Last name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Maiden Name</label>
+                    <input
+                      type="text"
+                      value={personForm.maiden_name}
+                      onChange={e => setPersonForm(f => ({ ...f, maiden_name: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="Maiden name (optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Birth Year</label>
+                    <input
+                      type="number"
+                      value={personForm.birth_year}
+                      onChange={e => setPersonForm(f => ({ ...f, birth_year: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="e.g. 1945"
+                      min="1800"
+                      max={new Date().getFullYear()}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Death Year
+                      <span className="text-gray-400 font-normal ml-1">(leave blank if living)</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={personForm.death_year}
+                      onChange={e => setPersonForm(f => ({ ...f, death_year: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="e.g. 2010"
+                      min="1800"
+                      max={new Date().getFullYear()}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Gender</label>
+                    <select
+                      value={personForm.gender}
+                      onChange={e => setPersonForm(f => ({ ...f, gender: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="unknown">Unknown / Prefer not to say</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3 pt-5">
+                    <input
+                      type="checkbox"
+                      id="is_living"
+                      checked={personForm.is_living}
+                      onChange={e => setPersonForm(f => ({ ...f, is_living: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded"
+                    />
+                    <label htmlFor="is_living" className="text-sm text-gray-700 dark:text-gray-300">
+                      This person is living
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6 flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setStep(1)}
                   className="px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-xl text-sm hover:bg-gray-50 transition-colors"
                 >
                   ← Back
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
-                    if (!personForm.first_name.trim() || !personForm.last_name.trim()) {
+                    if (step2Mode === 'existing' && !selectedOccupant) {
+                      setError('Please search for and select the other cemetery occupant.');
+                      return;
+                    }
+                    if (step2Mode === 'new' && (!personForm.first_name.trim() || !personForm.last_name.trim())) {
                       setError('Please enter first and last name.');
                       return;
                     }
@@ -537,26 +755,34 @@ export default function FamilyTreeSubmitPage() {
           </div>
         )}
 
-        {/* ── Step 3: Relationship + submitter + submit ── */}
+        {/* ── Step 3: Relationship + submit ── */}
         {step === 3 && anchorDeceased && (
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-4">
                 <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">
-                  Deceased (in cemetery)
+                  ⚰ Deceased (in cemetery)
                 </p>
                 <p className="font-bold text-gray-900 dark:text-white text-sm">
                   {anchorDeceased.first_name} {anchorDeceased.last_name}
                 </p>
               </div>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-4">
-                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
-                  Family Member Being Added
+              <div className={`rounded-xl p-4 border ${
+                step2Mode === 'existing'
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700'
+                  : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+              }`}>
+                <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${
+                  step2Mode === 'existing'
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-blue-600 dark:text-blue-400'
+                }`}>
+                  {step2Mode === 'existing' ? '⚰ Also in Cemetery' : '👤 Family Member Being Added'}
                 </p>
                 <p className="font-bold text-gray-900 dark:text-white text-sm">
-                  {personForm.first_name} {personForm.last_name}
-                  {personForm.is_living ? ' (Living)' : ''}
+                  {relatedPersonName}
+                  {step2Mode === 'new' && personForm.is_living ? ' (Living)' : ''}
                 </p>
               </div>
             </div>
@@ -567,14 +793,14 @@ export default function FamilyTreeSubmitPage() {
                   Step 3: Define the Relationship
                 </h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  How is <strong>{personForm.first_name} {personForm.last_name}</strong> related to{' '}
+                  How is <strong>{relatedPersonName}</strong> related to{' '}
                   <strong>{anchorDeceased.first_name} {anchorDeceased.last_name}</strong>?
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {personForm.first_name} is the _____ of {anchorDeceased.first_name} *
+                  {relatedPersonName || 'This person'} is the _____ of {anchorDeceased.first_name} *
                 </label>
                 <select
                   value={relationshipType}
@@ -592,10 +818,13 @@ export default function FamilyTreeSubmitPage() {
                   return def ? (
                     <div className="mt-2 p-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-lg text-xs space-y-1">
                       <p className="text-emerald-800 dark:text-emerald-200">
-                        <strong>{personForm.first_name}</strong> is the <strong>{def.label.replace(' (describe in notes)', '')}</strong> of <strong>{anchorDeceased.first_name}</strong>
+                        <strong>{relatedPersonName}</strong> is the{' '}
+                        <strong>{def.label.replace(' (describe in notes)', '')}</strong> of{' '}
+                        <strong>{anchorDeceased.first_name} {anchorDeceased.last_name}</strong>
                       </p>
                       <p className="text-emerald-700 dark:text-emerald-300">
-                        <strong>{anchorDeceased.first_name}</strong> is the <strong>{def.inverse}</strong> of <strong>{personForm.first_name}</strong>
+                        <strong>{anchorDeceased.first_name}</strong> is the{' '}
+                        <strong>{def.inverse}</strong> of <strong>{relatedPersonName}</strong>
                       </p>
                     </div>
                   ) : null;
