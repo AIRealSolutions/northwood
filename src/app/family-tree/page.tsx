@@ -38,83 +38,174 @@ interface LayoutNode extends TreeNode {
 // ─── Layout constants ─────────────────────────────────────────────────────────
 const NODE_W = 160;
 const NODE_H = 72;
-const H_GAP = 40;
-const V_GAP = 100;
+const H_GAP  = 48;   // horizontal gap between sibling nodes
+const V_GAP  = 110;  // vertical gap between generations
 
-// ─── Determine generation from relationships ──────────────────────────────────
-const PARENT_RELS = new Set(['parent', 'grandparent', 'great_grandparent', 'great_great_grandparent', 'step_parent', 'in_law']);
-const CHILD_RELS  = new Set(['child', 'grandchild', 'great_grandchild', 'great_great_grandchild', 'step_child']);
+// ─── Relationship classification ─────────────────────────────────────────────
+// "downward" means person_a is the PARENT and person_b is the CHILD
+const DOWNWARD_RELS = new Set([
+  'parent',           // person_a is parent of person_b
+  'grandparent',
+  'great_grandparent',
+  'great_great_grandparent',
+  'step_parent',
+]);
+// "upward" means person_a is the CHILD and person_b is the PARENT
+const UPWARD_RELS = new Set([
+  'child',
+  'grandchild',
+  'great_grandchild',
+  'great_great_grandchild',
+  'step_child',
+]);
+const SPOUSE_RELS = new Set(['spouse', 'in_law']);
 
-function assignGenerations(
-  nodes: TreeNode[],
-  relationships: TreeRelationship[],
-  rootId: string
-): Map<string, number> {
-  const genMap = new Map<string, number>();
-  genMap.set(rootId, 0);
-  const queue = [rootId];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const currentGen = genMap.get(current)!;
-    for (const rel of relationships) {
-      let neighborId: string | null = null;
-      let delta = 0;
-      if (rel.person_a_id === current) {
-        neighborId = rel.person_b_id;
-        delta = PARENT_RELS.has(rel.relationship_type) ? -1 : CHILD_RELS.has(rel.relationship_type) ? 1 : 0;
-      } else if (rel.person_b_id === current) {
-        neighborId = rel.person_a_id;
-        // inverse
-        delta = PARENT_RELS.has(rel.relationship_type) ? 1 : CHILD_RELS.has(rel.relationship_type) ? -1 : 0;
-      }
-      if (neighborId && !genMap.has(neighborId)) {
-        genMap.set(neighborId, currentGen + delta);
-        queue.push(neighborId);
-      }
+/**
+ * Returns the children (downward) of a given node id.
+ * person_a -[parent]-> person_b  ⟹  person_b is child of person_a
+ * person_a -[child]->  person_b  ⟹  person_b is parent of person_a  (person_a is child)
+ */
+function getChildren(nodeId: string, relationships: TreeRelationship[]): string[] {
+  const children: string[] = [];
+  for (const rel of relationships) {
+    if (rel.person_a_id === nodeId && DOWNWARD_RELS.has(rel.relationship_type)) {
+      // person_a is parent → person_b is child
+      children.push(rel.person_b_id);
+    } else if (rel.person_b_id === nodeId && UPWARD_RELS.has(rel.relationship_type)) {
+      // person_a is child → person_b (=nodeId) is parent → person_a is child
+      children.push(rel.person_a_id);
+    } else if (rel.person_a_id === nodeId && UPWARD_RELS.has(rel.relationship_type)) {
+      // person_a -[child]-> person_b means person_a IS the child, person_b is parent
+      // so person_b has person_a as a child — handled by the inverse above
+    } else if (rel.person_b_id === nodeId && DOWNWARD_RELS.has(rel.relationship_type)) {
+      // person_a -[parent]-> person_b(=nodeId) means person_a is the parent
+      // so nodeId's children are NOT here
     }
   }
-  // Assign 0 to any unvisited (disconnected)
-  for (const n of nodes) {
-    if (!genMap.has(n.id)) genMap.set(n.id, 0);
-  }
-  return genMap;
+  return children;
 }
 
+/**
+ * Reingold-Tilford style recursive layout.
+ *
+ * 1. Build a spanning tree rooted at `rootId` using parent→child edges.
+ * 2. Recursively assign x positions so that each subtree is centred over
+ *    its children, and siblings are spaced H_GAP apart.
+ * 3. Disconnected nodes (not reachable from root) are placed in a separate
+ *    row below the main tree.
+ */
 function buildLayout(
   nodes: TreeNode[],
   relationships: TreeRelationship[],
-  rootId?: string
+  rootId?: string,
 ): LayoutNode[] {
   if (nodes.length === 0) return [];
 
-  const root = rootId ? nodes.find(n => n.id === rootId) : nodes[0];
-  const genMap = assignGenerations(nodes, relationships, root?.id || nodes[0].id);
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const root = (rootId ? nodeMap.get(rootId) : null) ?? nodes[0];
 
-  // Group by generation
-  const byGen = new Map<number, TreeNode[]>();
-  for (const n of nodes) {
-    const g = genMap.get(n.id) ?? 0;
-    if (!byGen.has(g)) byGen.set(g, []);
-    byGen.get(g)!.push(n);
+  // ── Step 1: Build parent→children adjacency, respecting direction ──────────
+  // For the spanning tree we only follow "downward" edges so the tree flows
+  // top-to-bottom.  Spouse edges are drawn separately and don't affect depth.
+  const childrenOf = new Map<string, string[]>();
+  const hasParent   = new Set<string>();
+
+  for (const n of nodes) childrenOf.set(n.id, []);
+
+  for (const rel of relationships) {
+    if (SPOUSE_RELS.has(rel.relationship_type)) continue;
+
+    let parentId: string | null = null;
+    let childId:  string | null = null;
+
+    if (DOWNWARD_RELS.has(rel.relationship_type)) {
+      // person_a is the parent, person_b is the child
+      parentId = rel.person_a_id;
+      childId  = rel.person_b_id;
+    } else if (UPWARD_RELS.has(rel.relationship_type)) {
+      // person_a is the child, person_b is the parent
+      childId  = rel.person_a_id;
+      parentId = rel.person_b_id;
+    }
+
+    if (parentId && childId && nodeMap.has(parentId) && nodeMap.has(childId)) {
+      if (!hasParent.has(childId)) {
+        // Only assign one parent per node to keep it a tree (first wins)
+        childrenOf.get(parentId)!.push(childId);
+        hasParent.add(childId);
+      }
+    }
   }
 
-  const gens = Array.from(byGen.keys()).sort((a, b) => a - b);
-  const minGen = gens[0] ?? 0;
+  // ── Step 2: BFS from root to assign depths ────────────────────────────────
+  const depth  = new Map<string, number>();
+  const visited = new Set<string>();
+  const queue: string[] = [root.id];
+  depth.set(root.id, 0);
+  visited.add(root.id);
 
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    const d   = depth.get(cur)!;
+    for (const child of childrenOf.get(cur) ?? []) {
+      if (!visited.has(child)) {
+        visited.add(child);
+        depth.set(child, d + 1);
+        queue.push(child);
+      }
+    }
+  }
+
+  // ── Step 3: Recursive x-positioning (post-order) ─────────────────────────
+  // Each leaf gets a unique slot; each internal node is centred over its children.
+  let leafCounter = 0;
+  const xPos = new Map<string, number>();
+
+  function assignX(nodeId: string): void {
+    const children = childrenOf.get(nodeId) ?? [];
+    if (children.length === 0) {
+      // Leaf: assign next slot
+      xPos.set(nodeId, leafCounter * (NODE_W + H_GAP));
+      leafCounter++;
+    } else {
+      for (const c of children) assignX(c);
+      const firstX = xPos.get(children[0])!;
+      const lastX  = xPos.get(children[children.length - 1])!;
+      xPos.set(nodeId, (firstX + lastX) / 2);
+    }
+  }
+
+  assignX(root.id);
+
+  // ── Step 4: Build LayoutNode list for reachable nodes ────────────────────
   const layout: LayoutNode[] = [];
-  for (const g of gens) {
-    const row = byGen.get(g)!;
-    const rowIndex = g - minGen;
-    row.forEach((n, colIndex) => {
-      layout.push({
-        ...n,
-        generation: g,
-        col: colIndex,
-        x: colIndex * (NODE_W + H_GAP),
-        y: rowIndex * (NODE_H + V_GAP),
-      });
+  for (const [id, d] of depth.entries()) {
+    const node = nodeMap.get(id)!;
+    layout.push({
+      ...node,
+      generation: d,
+      col: 0,
+      x: xPos.get(id) ?? 0,
+      y: d * (NODE_H + V_GAP),
     });
   }
+
+  // ── Step 5: Place disconnected nodes below the main tree ─────────────────
+  const maxDepth = layout.reduce((m, n) => Math.max(m, n.generation), 0);
+  let orphanCol   = 0;
+  for (const n of nodes) {
+    if (!visited.has(n.id)) {
+      layout.push({
+        ...n,
+        generation: maxDepth + 2,
+        col: orphanCol,
+        x: orphanCol * (NODE_W + H_GAP),
+        y: (maxDepth + 2) * (NODE_H + V_GAP),
+      });
+      orphanCol++;
+    }
+  }
+
   return layout;
 }
 
@@ -450,28 +541,50 @@ export default function FamilyTreePage() {
                   const a = layout.find(n => n.id === rel.person_a_id);
                   const b = layout.find(n => n.id === rel.person_b_id);
                   if (!a || !b) return null;
-                  const ax = a.x + NODE_W / 2;
-                  const ay = a.y + NODE_H;
-                  const bx = b.x + NODE_W / 2;
-                  const by = b.y;
-                  const midY = (ay + by) / 2;
-                  const isSpouse = rel.relationship_type === 'spouse';
+
+                  const isSpouse = SPOUSE_RELS.has(rel.relationship_type);
+                  const sameRow  = Math.abs(a.y - b.y) < 10;
+
+                  // Determine which node is the parent (higher up = smaller y)
+                  const top    = a.y <= b.y ? a : b;
+                  const bottom = a.y <= b.y ? b : a;
+
+                  const topCx    = top.x    + NODE_W / 2;
+                  const topCy    = top.y    + NODE_H;
+                  const bottomCx = bottom.x + NODE_W / 2;
+                  const bottomCy = bottom.y;
+
+                  // Elbow connector: vertical down from parent, then horizontal, then vertical to child
+                  const elbowY = topCy + (bottomCy - topCy) * 0.45;
+
+                  let pathD: string;
+                  if (isSpouse || sameRow) {
+                    // Horizontal link between same-generation nodes
+                    const leftX  = Math.min(a.x + NODE_W, b.x + NODE_W);
+                    const rightX = Math.max(a.x, b.x);
+                    const midX   = (leftX + rightX) / 2;
+                    const midY   = a.y + NODE_H / 2;
+                    pathD = `M ${a.x + NODE_W} ${midY} L ${b.x} ${midY}`;
+                    void midX; // suppress unused warning
+                  } else {
+                    // Elbow: down from parent centre, across, then down to child centre
+                    pathD = `M ${topCx} ${topCy} L ${topCx} ${elbowY} L ${bottomCx} ${elbowY} L ${bottomCx} ${bottomCy}`;
+                  }
+
                   return (
                     <g key={rel.id}>
                       <path
-                        d={isSpouse
-                          ? `M ${ax} ${a.y + NODE_H / 2} L ${bx} ${b.y + NODE_H / 2}`
-                          : `M ${ax} ${ay} C ${ax} ${midY}, ${bx} ${midY}, ${bx} ${by}`}
+                        d={pathD}
                         fill="none"
                         stroke={isSpouse ? '#f472b6' : '#6ee7b7'}
                         strokeWidth={1.5}
                         strokeDasharray={isSpouse ? '5,3' : undefined}
                         opacity={0.7}
                       />
-                      {/* Relationship label at midpoint */}
+                      {/* Relationship label near midpoint */}
                       <text
-                        x={(ax + bx) / 2}
-                        y={isSpouse ? a.y + NODE_H / 2 - 6 : midY}
+                        x={(a.x + NODE_W / 2 + b.x + NODE_W / 2) / 2}
+                        y={isSpouse || sameRow ? a.y + NODE_H / 2 - 6 : elbowY - 4}
                         textAnchor="middle"
                         fontSize={9}
                         fill="#9ca3af"
