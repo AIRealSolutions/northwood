@@ -1,33 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabase } from '@/lib/supabase';
 
-// GET: Fetch recent Community Family Tree activity for the homepage news feed
-// Returns the 20 most recent approved nodes and relationships with plot links
+// GET: Fetch Community Family Tree activity for the homepage news feed
+// Query params:
+//   page    = page number, 1-indexed (default: 1)
+//   limit   = items per page (default: 10)
+//   all_time = "true" to bypass today-only filter (default: false — today only)
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)));
+    const allTime = searchParams.get('all_time') === 'true';
+
     const supabase = getServiceSupabase();
 
-    // Fetch recent approved nodes (new people added to the tree)
-    const { data: recentNodes, error: nodesError } = await supabase
+    // Build the start-of-today timestamp in UTC
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayStartISO = todayStart.toISOString();
+
+    // Fetch more than we need so we can merge, sort, and paginate correctly
+    const fetchLimit = (page * limit) + limit;
+
+    // ── Nodes ──────────────────────────────────────────────────────────────────
+    let nodesQuery = supabase
       .from('family_tree_nodes')
       .select('id, first_name, middle_name, last_name, maiden_name, birth_year, death_year, is_living, gender, deceased_id, submitted_by_name, created_at')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
-      .limit(15);
+      .limit(fetchLimit);
 
+    if (!allTime) {
+      nodesQuery = nodesQuery.gte('created_at', todayStartISO);
+    }
+
+    const { data: recentNodes, error: nodesError } = await nodesQuery;
     if (nodesError) throw nodesError;
 
-    // Fetch recent approved relationships
-    const { data: recentRels, error: relError } = await supabase
+    // ── Relationships ──────────────────────────────────────────────────────────
+    let relQuery = supabase
       .from('family_tree_relationships')
       .select('id, person_a_id, person_b_id, relationship_type, inverse_type, submitted_by_name, created_at')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
-      .limit(15);
+      .limit(fetchLimit);
 
+    if (!allTime) {
+      relQuery = relQuery.gte('created_at', todayStartISO);
+    }
+
+    const { data: recentRels, error: relError } = await relQuery;
     if (relError) throw relError;
 
-    // For relationships, fetch the names of the people involved
+    // ── Resolve person names for relationships ─────────────────────────────────
     const personIds = new Set<string>();
     (recentRels || []).forEach((r: any) => {
       personIds.add(r.person_a_id);
@@ -43,12 +69,13 @@ export async function GET(request: NextRequest) {
       (persons || []).forEach((p: any) => { personMap[p.id] = p; });
     }
 
-    // For nodes with deceased_id, fetch the plot_number so we can link to the plot
-    const deceasedIds = (recentNodes || [])
-      .filter((n: any) => n.deceased_id)
-      .map((n: any) => n.deceased_id);
+    // ── Resolve plot IDs for deceased records ──────────────────────────────────
+    const deceasedIds = [
+      ...(recentNodes || []).filter((n: any) => n.deceased_id).map((n: any) => n.deceased_id),
+      ...Object.values(personMap).filter((p: any) => p.deceased_id).map((p: any) => p.deceased_id),
+    ];
 
-    let plotMap: Record<string, string> = {}; // deceased_id -> plot_id (UUID)
+    let plotMap: Record<string, string> = {}; // deceased_id -> plot UUID
     if (deceasedIds.length > 0) {
       const { data: records } = await supabase
         .from('deceased_records')
@@ -57,7 +84,7 @@ export async function GET(request: NextRequest) {
       (records || []).forEach((r: any) => { plotMap[r.id] = r.plot_id; });
     }
 
-    // Build feed items
+    // ── Build feed items ───────────────────────────────────────────────────────
     const nodeItems = (recentNodes || []).map((node: any) => ({
       id: `node-${node.id}`,
       type: 'new_person',
@@ -94,12 +121,24 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Merge and sort by date, take top 20
+    // ── Merge, sort, paginate ──────────────────────────────────────────────────
     const allItems = [...nodeItems, ...relItems]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 20);
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    return NextResponse.json({ items: allItems });
+    const total = allItems.length;
+    const offset = (page - 1) * limit;
+    const pageItems = allItems.slice(offset, offset + limit);
+    const hasMore = offset + limit < total;
+
+    return NextResponse.json({
+      items: pageItems,
+      page,
+      limit,
+      total,
+      has_more: hasMore,
+      all_time: allTime,
+      today_start: allTime ? null : todayStartISO,
+    });
   } catch (error: any) {
     console.error('News feed GET error:', error);
     return NextResponse.json({ error: error.message || 'Failed to fetch news feed' }, { status: 500 });

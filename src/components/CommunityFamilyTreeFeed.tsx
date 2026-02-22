@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
 interface FeedItem {
@@ -39,25 +39,72 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+const LIMIT = 10;
+
 export default function CommunityFamilyTreeFeed() {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [allTime, setAllTime] = useState(false);
+  const [todayEmpty, setTodayEmpty] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/news-feed')
-      .then(r => r.json())
-      .then(data => setItems(data.items || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  const fetchItems = useCallback(async (nextPage: number, isAllTime: boolean, append: boolean) => {
+    try {
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        limit: String(LIMIT),
+        all_time: String(isAllTime),
+      });
+      const res = await fetch(`/api/news-feed?${params}`);
+      const data = await res.json();
+      const newItems: FeedItem[] = data.items || [];
+
+      if (append) {
+        setItems(prev => [...prev, ...newItems]);
+      } else {
+        setItems(newItems);
+        // If today has no items, auto-switch to all-time silently
+        if (!isAllTime && newItems.length === 0) {
+          setTodayEmpty(true);
+        }
+      }
+      setHasMore(data.has_more ?? false);
+      setPage(nextPage);
+    } catch (e) {
+      console.error(e);
+    }
   }, []);
+
+  // Initial load — today only
+  useEffect(() => {
+    setLoading(true);
+    fetchItems(1, false, false).finally(() => setLoading(false));
+  }, [fetchItems]);
+
+  // When user switches to all-time
+  const handleShowAllTime = async () => {
+    setAllTime(true);
+    setTodayEmpty(false);
+    setLoadingMore(true);
+    await fetchItems(1, true, false);
+    setLoadingMore(false);
+  };
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    await fetchItems(page + 1, allTime, true);
+    setLoadingMore(false);
+  };
 
   if (loading) {
     return (
       <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
         <div className="flex items-center gap-2 mb-4">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-            Community Family Tree — Live Activity
+            Community Family Tree — Today&apos;s Activity
           </h3>
         </div>
         <div className="space-y-3">
@@ -69,17 +116,51 @@ export default function CommunityFamilyTreeFeed() {
     );
   }
 
+  // No items today and not yet switched to all-time — show prompt
+  if (todayEmpty && !allTime) {
+    return (
+      <div className="w-full rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            Community Family Tree
+          </h3>
+        </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          No new connections have been added today yet. Be the first — or browse all-time activity below.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleShowAllTime}
+            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg transition-colors"
+          >
+            {loadingMore ? 'Loading…' : 'View All-Time Activity'}
+          </button>
+          <Link href="/auth/register"
+            className="px-4 py-2 border border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-sm font-semibold rounded-lg transition-colors">
+            Register to Contribute
+          </Link>
+          <Link href="/family-tree"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-semibold rounded-lg transition-colors">
+            View Full Tree
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // No items at all (all-time empty too)
   if (items.length === 0) {
     return (
       <div className="w-full rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-5">
         <div className="flex items-center gap-2 mb-3">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
           <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
             Community Family Tree
           </h3>
         </div>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-          Be the first to connect your family to Northwood Cemetery's history.
+          Be the first to connect your family to Northwood Cemetery&apos;s history.
           Register as a member and start building the community family tree.
         </p>
         <div className="flex gap-2">
@@ -99,17 +180,28 @@ export default function CommunityFamilyTreeFeed() {
   return (
     <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-            Community Family Tree — Recent Activity
+            Community Family Tree —{' '}
+            {allTime ? 'All-Time Activity' : "Today's Activity"}
           </h3>
         </div>
-        <Link href="/family-tree"
-          className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium">
-          View Full Tree →
-        </Link>
+        <div className="flex items-center gap-3">
+          {!allTime && (
+            <button
+              onClick={handleShowAllTime}
+              className="text-xs text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors"
+            >
+              Show all-time →
+            </button>
+          )}
+          <Link href="/family-tree"
+            className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium">
+            View Full Tree →
+          </Link>
+        </div>
       </div>
 
       {/* Feed items */}
@@ -124,7 +216,9 @@ export default function CommunityFamilyTreeFeed() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 dark:text-gray-200">
                     <span className="font-semibold">{item.person_name}</span>
-                    {item.maiden_name && <span className="text-gray-500 dark:text-gray-400"> (née {item.maiden_name})</span>}
+                    {item.maiden_name && (
+                      <span className="text-gray-500 dark:text-gray-400"> (née {item.maiden_name})</span>
+                    )}
                     {(item.birth_year || item.death_year) && (
                       <span className="text-gray-500 dark:text-gray-400">
                         {' '}· {item.birth_year ?? '?'}–{item.death_year ?? (item.is_living ? 'Present' : '?')}
@@ -132,7 +226,7 @@ export default function CommunityFamilyTreeFeed() {
                     )}
                     <span className="text-gray-500 dark:text-gray-400"> was added to the Community Family Tree</span>
                   </p>
-                  <div className="flex items-center gap-3 mt-1">
+                  <div className="flex flex-wrap items-center gap-3 mt-1">
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                       by {item.submitted_by} · {timeAgo(item.created_at)}
                     </span>
@@ -176,7 +270,7 @@ export default function CommunityFamilyTreeFeed() {
                       <span className="font-semibold">{item.person_b_name}</span>
                     )}
                   </p>
-                  <div className="flex items-center gap-3 mt-1">
+                  <div className="flex flex-wrap items-center gap-3 mt-1">
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                       by {item.submitted_by} · {timeAgo(item.created_at)}
                     </span>
@@ -192,12 +286,25 @@ export default function CommunityFamilyTreeFeed() {
         ))}
       </div>
 
+      {/* Load More */}
+      {hasMore && (
+        <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 text-center">
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="px-5 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading…' : `Load More`}
+          </button>
+        </div>
+      )}
+
       {/* CTA footer */}
       <div className="px-5 py-4 bg-emerald-50 dark:bg-emerald-950/20 border-t border-emerald-100 dark:border-emerald-900/30">
         <p className="text-sm text-emerald-800 dark:text-emerald-300 mb-2">
           🌳 Know someone buried at Northwood? Help build the community family tree.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/auth/register"
             className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg transition-colors">
             Register to Contribute
