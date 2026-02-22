@@ -3,10 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /**
  * POST /api/family-tree/intermediate
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     // ── Step 1: Find or create the occupant's family_tree_node ────────────────
     let occupantNodeId: string;
-    const { data: existingOccupantNode } = await supabase
+    const { data: existingOccupantNode } = await getSupabase()
       .from('family_tree_nodes')
       .select('id')
       .eq('deceased_id', deceased_id)
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
       occupantNodeId = existingOccupantNode.id;
     } else {
       // Fetch the deceased record to get their name
-      const { data: deceasedRecord } = await supabase
+      const { data: deceasedRecord } = await getSupabase()
         .from('deceased_records')
         .select('first_name, last_name, birth_date, death_date, gender')
         .eq('id', deceased_id)
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Deceased record not found' }, { status: 404 });
       }
 
-      const { data: newOccupantNode, error: occupantNodeError } = await supabase
+      const { data: newOccupantNode, error: occupantNodeError } = await getSupabase()
         .from('family_tree_nodes')
         .insert({
           deceased_id,
@@ -114,7 +116,7 @@ export async function POST(req: NextRequest) {
       cemetery_location ? `Location: ${cemetery_location}` : null,
     ].filter(Boolean).join(' | ') || null;
 
-    const { data: intermediateNode, error: intermediateNodeError } = await supabase
+    const { data: intermediateNode, error: intermediateNodeError } = await getSupabase()
       .from('family_tree_nodes')
       .insert({
         deceased_id: null,
@@ -143,7 +145,7 @@ export async function POST(req: NextRequest) {
     // ── Step 3: Create edge — occupant → intermediate ─────────────────────────
     // e.g. occupant is the grandparent, intermediate is their child
     const inverseOccupantToIntermediate = getInverse(intermediate_to_occupant);
-    await supabase.from('family_tree_relationships').insert({
+    await getSupabase().from('family_tree_relationships').insert({
       node_a_id: occupantNodeId,
       node_b_id: intermediateNodeId,
       relationship_type: intermediate_to_occupant,   // e.g. "child" (intermediate is the occupant's child)
@@ -158,7 +160,7 @@ export async function POST(req: NextRequest) {
     // e.g. intermediate is the parent, member is their child (the grandchild)
     if (member_node_id) {
       const inverseMemberToIntermediate = getInverse(member_to_intermediate);
-      await supabase.from('family_tree_relationships').insert({
+      await getSupabase().from('family_tree_relationships').insert({
         node_a_id: intermediateNodeId,
         node_b_id: member_node_id,
         relationship_type: member_to_intermediate,    // e.g. "child" (member is intermediate's child)

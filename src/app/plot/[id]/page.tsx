@@ -22,6 +22,76 @@ interface PlotConnection {
   deceased_records?: { id: string; first_name: string; last_name: string } | null;
 }
 
+// ─── Family Tree Branch Component ────────────────────────────────────────────
+
+function FamilyBranch({
+  label,
+  icon,
+  connections,
+  defaultOpen = false,
+  accentColor = 'green',
+}: {
+  label: string;
+  icon: string;
+  connections: PlotConnection[];
+  defaultOpen?: boolean;
+  accentColor?: 'green' | 'blue' | 'purple' | 'amber' | 'rose' | 'teal';
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (connections.length === 0) return null;
+
+  const colors: Record<string, string> = {
+    green:  'border-green-200  bg-green-50  text-green-800  dark:border-green-700  dark:bg-green-900/30  dark:text-green-200',
+    blue:   'border-blue-200   bg-blue-50   text-blue-800   dark:border-blue-700   dark:bg-blue-900/30   dark:text-blue-200',
+    purple: 'border-purple-200 bg-purple-50 text-purple-800 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-200',
+    amber:  'border-amber-200  bg-amber-50  text-amber-800  dark:border-amber-700  dark:bg-amber-900/30  dark:text-amber-200',
+    rose:   'border-rose-200   bg-rose-50   text-rose-800   dark:border-rose-700   dark:bg-rose-900/30   dark:text-rose-200',
+    teal:   'border-teal-200   bg-teal-50   text-teal-800   dark:border-teal-700   dark:bg-teal-900/30   dark:text-teal-200',
+  };
+  const headerColors: Record<string, string> = {
+    green:  'bg-green-100  dark:bg-green-900/50',
+    blue:   'bg-blue-100   dark:bg-blue-900/50',
+    purple: 'bg-purple-100 dark:bg-purple-900/50',
+    amber:  'bg-amber-100  dark:bg-amber-900/50',
+    rose:   'bg-rose-100   dark:bg-rose-900/50',
+    teal:   'bg-teal-100   dark:bg-teal-900/50',
+  };
+
+  return (
+    <div className={`rounded-lg border ${colors[accentColor]} overflow-hidden`}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center justify-between px-4 py-2.5 ${headerColors[accentColor]} transition-colors`}
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <span>{icon}</span>
+          {label}
+          <span className="text-xs font-normal opacity-70">({connections.length})</span>
+        </span>
+        <span className={`text-xs transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && (
+        <div className="px-4 py-3 space-y-2">
+          {connections.map(c => {
+            const def = c.member_relationship ? getRelationship(c.member_relationship) : null;
+            const relLabel = def ? def.inverse : (c.occupant_relationship || c.relationship || 'Family');
+            return (
+              <div key={c.id} className="flex items-center gap-2 text-xs">
+                <span className="opacity-60">👤</span>
+                <span className="font-medium">{relLabel}</span>
+                {c.deceased_records && (
+                  <span className="opacity-60">of {c.deceased_records.first_name} {c.deceased_records.last_name}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Connect with Descendants Component ───────────────────────────────────────
 
 function ConnectWithDescendants({
@@ -40,6 +110,7 @@ function ConnectWithDescendants({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [loadingConnections, setLoadingConnections] = useState(true);
+  const [treeOpen, setTreeOpen] = useState(true);
 
   // Intermediate node prompt state
   const [intermediateHint, setIntermediateHint] = useState<IntermediateNodeHint | null>(null);
@@ -119,7 +190,43 @@ function ConnectWithDescendants({
     }
   };
 
-  // Count of approved connections
+  // ── Classify connections into family tree branches ──
+  const classify = (rel: string) => {
+    if (!rel) return 'other';
+    const r = rel.toLowerCase();
+    // Paternal upline
+    if (r.startsWith('paternal_') && (r.includes('father') || r.includes('grandfather') || r.includes('great'))) return 'paternal';
+    if (r === 'father' || r === 'paternal_grandfather' || r === 'paternal_grandmother') return 'paternal';
+    if (r.includes('paternal_great')) return 'paternal';
+    // Maternal upline
+    if (r === 'mother' || r === 'maternal_grandfather' || r === 'maternal_grandmother') return 'maternal';
+    if (r.includes('maternal_great')) return 'maternal';
+    // Generic parent/grandparent (side unknown)
+    if (r === 'parent' || r === 'grandparent' || r === 'great_grandparent' || r === 'great_great_grandparent') return 'ancestor';
+    // Spouse
+    if (r === 'spouse' || r === 'domestic_partner') return 'spouse';
+    // Descendants
+    if (['child', 'grandchild', 'great_grandchild', 'great_great_grandchild', 'descendant'].includes(r)) return 'descendant';
+    // Siblings
+    if (r.includes('sibling') || r === 'step_sibling' || r === 'half_sibling') return 'sibling';
+    // Paternal collateral (aunts/uncles/cousins)
+    if (r.startsWith('paternal_')) return 'paternal_collateral';
+    // Maternal collateral
+    if (r.startsWith('maternal_')) return 'maternal_collateral';
+    // Aunts/uncles/cousins (side unknown)
+    if (r.includes('aunt') || r.includes('uncle') || r.includes('cousin') || r.includes('nephew') || r.includes('niece')) return 'collateral';
+    // In-law / step / adoptive
+    if (r.includes('in_law') || r.includes('step_') || r.includes('adoptive')) return 'extended';
+    return 'other';
+  };
+
+  const byBranch: Record<string, PlotConnection[]> = {};
+  for (const c of connections) {
+    const branch = classify(c.member_relationship || c.relationship || '');
+    if (!byBranch[branch]) byBranch[branch] = [];
+    byBranch[branch].push(c);
+  }
+
   const connectionCount = connections.length;
 
   return (
@@ -129,7 +236,7 @@ function ConnectWithDescendants({
         <div>
           <h2 className="text-lg font-bold text-green-900 dark:text-green-100 flex items-center gap-2">
             <span className="text-2xl">🌳</span>
-            Connect with Descendants
+            Family Connections
           </h2>
           <p className="text-sm text-green-700 dark:text-green-300 mt-1">
             Are you a family member or descendant of someone interred in this plot?
@@ -138,49 +245,36 @@ function ConnectWithDescendants({
         </div>
         {connectionCount > 0 && (
           <div className="flex-shrink-0 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 text-sm font-bold px-3 py-1.5 rounded-full">
-            {connectionCount} {connectionCount === 1 ? 'family' : 'families'} connected
+            {connectionCount} connected
           </div>
         )}
       </div>
 
-      {/* Existing connections summary */}
+      {/* Collapsible family tree */}
       {!loadingConnections && connectionCount > 0 && (
-        <div className="mb-4">
-          <div className="flex flex-wrap gap-2 mb-3">
-            {connections.map(c => {
-              const memberName = [c.user_first_name, c.user_last_name].filter(Boolean).join(' ');
-              const def = c.member_relationship ? getRelationship(c.member_relationship) : null;
-              // Use def.label (what the member is, e.g. "Grandson") not def.inverse (what the occupant is to them)
-              const relationshipLabel = def ? def.label.replace(/ \(.*?\)/g, '').replace(/ —.*$/, '').trim() : (c.occupant_relationship || c.relationship);
-              return (
-                <span
-                  key={c.id}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-green-900 border border-green-200 dark:border-green-600 rounded-full text-xs text-green-800 dark:text-green-200"
-                >
-                  <span>👤</span>
-                  {memberName && (
-                    <span className="font-semibold">{memberName}</span>
-                  )}
-                  {memberName && <span className="text-green-400 dark:text-green-500">·</span>}
-                  <span>{relationshipLabel}</span>
-                  {c.deceased_records && (
-                    <span className="text-green-500 dark:text-green-400">
-                      {' '}of {c.deceased_records.first_name} {c.deceased_records.last_name}
-                    </span>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-          {/* Link to full family tree view filtered for this plot's deceased */}
-          {deceased.length > 0 && (
-            <Link
-              href={`/family-tree?deceased_id=${deceased[0].id}`}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100 bg-green-100 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-800/60 border border-green-300 dark:border-green-600 px-3 py-1.5 rounded-full transition-colors"
-            >
-              <span>🌳</span>
-              View Family Tree
-            </Link>
+        <div className="mb-5">
+          <button
+            type="button"
+            onClick={() => setTreeOpen(o => !o)}
+            className="flex items-center gap-2 text-sm font-semibold text-green-800 dark:text-green-200 mb-3 hover:text-green-900 dark:hover:text-green-100 transition-colors"
+          >
+            <span className={`text-xs transition-transform duration-200 ${treeOpen ? 'rotate-90' : ''}`}>▶</span>
+            {treeOpen ? 'Hide' : 'Show'} Family Tree
+          </button>
+          {treeOpen && (
+            <div className="space-y-2">
+              <FamilyBranch label="Paternal Upline" icon="👴" connections={byBranch['paternal'] || []} defaultOpen accentColor="blue" />
+              <FamilyBranch label="Maternal Upline" icon="👵" connections={byBranch['maternal'] || []} defaultOpen accentColor="purple" />
+              <FamilyBranch label="Ancestors (Side Unknown)" icon="🏛️" connections={byBranch['ancestor'] || []} accentColor="teal" />
+              <FamilyBranch label="Spouse / Partner" icon="💍" connections={byBranch['spouse'] || []} defaultOpen accentColor="rose" />
+              <FamilyBranch label="Descendants" icon="👶" connections={byBranch['descendant'] || []} defaultOpen accentColor="green" />
+              <FamilyBranch label="Siblings" icon="🤝" connections={byBranch['sibling'] || []} accentColor="green" />
+              <FamilyBranch label="Paternal — Aunts, Uncles & Cousins" icon="👨‍👩‍👧" connections={byBranch['paternal_collateral'] || []} accentColor="blue" />
+              <FamilyBranch label="Maternal — Aunts, Uncles & Cousins" icon="👨‍👩‍👧" connections={byBranch['maternal_collateral'] || []} accentColor="purple" />
+              <FamilyBranch label="Collateral (Side Unknown)" icon="👥" connections={byBranch['collateral'] || []} accentColor="teal" />
+              <FamilyBranch label="Step / In-Law / Adoptive" icon="🏠" connections={byBranch['extended'] || []} accentColor="amber" />
+              <FamilyBranch label="Other" icon="🔗" connections={byBranch['other'] || []} accentColor="amber" />
+            </div>
           )}
         </div>
       )}
