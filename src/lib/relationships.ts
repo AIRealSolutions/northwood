@@ -147,6 +147,73 @@ export function getRelationshipCategory(memberRelationshipValue: string): string
   return def ? def.category : 'other';
 }
 
+/**
+ * Map of relationship values that imply a missing intermediate node.
+ * Key   = what the member says they are to the occupant
+ * Value = description of the missing link between them
+ */
+export interface IntermediateNodeHint {
+  /** Human-readable prompt shown to the member */
+  prompt: string;
+  /** The intermediate person's relationship TO the occupant (e.g. "child") */
+  intermediateToOccupant: string;
+  /** The member's relationship TO the intermediate person (e.g. "child") */
+  memberToIntermediate: string;
+  /** Label for the intermediate person's role (e.g. "Parent") */
+  intermediateLabel: string;
+}
+
+export const INTERMEDIATE_NODE_MAP: Record<string, IntermediateNodeHint> = {
+  // Grandchildren — missing parent
+  grandchild: {
+    prompt: 'Who is your parent that connects you to this occupant?',
+    intermediateToOccupant: 'child',
+    memberToIntermediate: 'child',
+    intermediateLabel: 'Parent',
+  },
+  // Great-grandchildren — missing parent (closest missing link first)
+  great_grandchild: {
+    prompt: 'Who is your parent that connects you to this occupant?',
+    intermediateToOccupant: 'grandchild',
+    memberToIntermediate: 'child',
+    intermediateLabel: 'Parent',
+  },
+  // Great-great-grandchildren — missing parent
+  great_great_grandchild: {
+    prompt: 'Who is your parent that connects you to this occupant?',
+    intermediateToOccupant: 'great_grandchild',
+    memberToIntermediate: 'child',
+    intermediateLabel: 'Parent',
+  },
+  // Great-nephew / Great-niece — missing parent (sibling of occupant’s child)
+  great_nephew: {
+    prompt: 'Who is your parent that connects you to this occupant?',
+    intermediateToOccupant: 'nephew_niece',
+    memberToIntermediate: 'child',
+    intermediateLabel: 'Parent',
+  },
+  great_niece: {
+    prompt: 'Who is your parent that connects you to this occupant?',
+    intermediateToOccupant: 'nephew_niece',
+    memberToIntermediate: 'child',
+    intermediateLabel: 'Parent',
+  },
+  great_nephew_niece: {
+    prompt: 'Who is your parent that connects you to this occupant?',
+    intermediateToOccupant: 'nephew_niece',
+    memberToIntermediate: 'child',
+    intermediateLabel: 'Parent',
+  },
+};
+
+/**
+ * Returns an intermediate node hint if the given relationship implies
+ * a missing person between the member and the occupant, or null otherwise.
+ */
+export function getIntermediateNodeHint(memberRelationshipValue: string): IntermediateNodeHint | null {
+  return INTERMEDIATE_NODE_MAP[memberRelationshipValue] ?? null;
+}
+
 /** Group relationships by category for the dropdown — ordered for intuitive use */
 export const RELATIONSHIP_GROUPS: { label: string; values: RelationshipDef[] }[] = [
   {

@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { plotsAPI, PlotWithDetails, DeceasedRecord } from '@/lib/supabase';
-import { RELATIONSHIP_GROUPS, getRelationship, deriveOccupantRelationship, getRelationshipCategory } from '@/lib/relationships';
+import { RELATIONSHIP_GROUPS, getRelationship, deriveOccupantRelationship, getRelationshipCategory, getIntermediateNodeHint, IntermediateNodeHint } from '@/lib/relationships';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +40,24 @@ function ConnectWithDescendants({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [loadingConnections, setLoadingConnections] = useState(true);
+
+  // Intermediate node prompt state
+  const [intermediateHint, setIntermediateHint] = useState<IntermediateNodeHint | null>(null);
+  const [submittedDeceasedId, setSubmittedDeceasedId] = useState<string | null>(null);
+  const [submittedMemberNodeId, setSubmittedMemberNodeId] = useState<string | null>(null);
+  const [intermediateForm, setIntermediateForm] = useState({
+    first_name: '',
+    last_name: '',
+    birth_year: '',
+    death_year: '',
+    is_living: true,
+    gender: '',
+    cemetery_name: '',
+    cemetery_location: '',
+  });
+  const [submittingIntermediate, setSubmittingIntermediate] = useState(false);
+  const [intermediateSubmitted, setIntermediateSubmitted] = useState(false);
+  const [intermediateError, setIntermediateError] = useState('');
 
   // Load existing approved connections for this plot
   useEffect(() => {
@@ -83,8 +101,17 @@ function ConnectWithDescendants({
         const d = await res.json();
         throw new Error(d.error || 'Submission failed');
       }
+      const responseData = await res.json();
       setSubmitted(true);
       setShowForm(false);
+      // Check if this relationship implies a missing intermediate node
+      const hint = getIntermediateNodeHint(form.member_relationship);
+      if (hint) {
+        setIntermediateHint(hint);
+        // Store the deceased_id and member node id for linking the intermediate
+        setSubmittedDeceasedId(form.deceased_id || (deceased[0]?.id ?? null));
+        setSubmittedMemberNodeId(responseData.member_node_id ?? null);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Submission failed. Please try again.');
     } finally {
@@ -167,6 +194,217 @@ function ConnectWithDescendants({
             request and approve it shortly. You can view the status in{' '}
             <Link href="/my-connections" className="underline font-medium">My Connections</Link>.
           </p>
+        </div>
+      )}
+
+      {/* Intermediate node prompt — shown after a skip-generation connection is submitted */}
+      {submitted && intermediateHint && !intermediateSubmitted && (
+        <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-600 rounded-xl p-5">
+          <h3 className="font-bold text-amber-900 dark:text-amber-100 text-sm flex items-center gap-2 mb-1">
+            <span className="text-lg">🔗</span>
+            Help us complete the family tree
+          </h3>
+          <p className="text-sm text-amber-800 dark:text-amber-200 mb-4">
+            {intermediateHint.prompt} Adding this missing link helps build a more complete family tree for everyone.
+          </p>
+
+          {intermediateError && (
+            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-red-700 dark:text-red-300 text-sm">
+              {intermediateError}
+            </div>
+          )}
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!intermediateForm.first_name.trim() || !intermediateForm.last_name.trim()) {
+                setIntermediateError('Please enter the first and last name.');
+                return;
+              }
+              setSubmittingIntermediate(true);
+              setIntermediateError('');
+              try {
+                const res = await fetch('/api/family-tree/intermediate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    // The intermediate person's details
+                    first_name: intermediateForm.first_name.trim(),
+                    last_name: intermediateForm.last_name.trim(),
+                    birth_year: intermediateForm.birth_year ? parseInt(intermediateForm.birth_year) : null,
+                    death_year: intermediateForm.death_year ? parseInt(intermediateForm.death_year) : null,
+                    is_living: intermediateForm.is_living,
+                    gender: intermediateForm.gender || null,
+                    cemetery_name: intermediateForm.cemetery_name.trim() || null,
+                    cemetery_location: intermediateForm.cemetery_location.trim() || null,
+                    // Relationship context
+                    deceased_id: submittedDeceasedId,
+                    member_node_id: submittedMemberNodeId,
+                    intermediate_to_occupant: intermediateHint.intermediateToOccupant,
+                    member_to_intermediate: intermediateHint.memberToIntermediate,
+                  }),
+                });
+                if (!res.ok) {
+                  const d = await res.json();
+                  throw new Error(d.error || 'Submission failed');
+                }
+                setIntermediateSubmitted(true);
+              } catch (err: unknown) {
+                setIntermediateError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
+              } finally {
+                setSubmittingIntermediate(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            {/* Name */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-amber-800 dark:text-amber-200 mb-1">First Name *</label>
+                <input
+                  type="text"
+                  value={intermediateForm.first_name}
+                  onChange={e => setIntermediateForm(f => ({ ...f, first_name: e.target.value }))}
+                  placeholder="First name"
+                  required
+                  className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-amber-800 dark:text-amber-200 mb-1">Last Name *</label>
+                <input
+                  type="text"
+                  value={intermediateForm.last_name}
+                  onChange={e => setIntermediateForm(f => ({ ...f, last_name: e.target.value }))}
+                  placeholder="Last name"
+                  required
+                  className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Living or Deceased */}
+            <div>
+              <label className="block text-xs font-medium text-amber-800 dark:text-amber-200 mb-2">Status</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-100 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="is_living"
+                    checked={intermediateForm.is_living}
+                    onChange={() => setIntermediateForm(f => ({ ...f, is_living: true, death_year: '' }))}
+                    className="accent-amber-600"
+                  />
+                  Still living
+                </label>
+                <label className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-100 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="is_living"
+                    checked={!intermediateForm.is_living}
+                    onChange={() => setIntermediateForm(f => ({ ...f, is_living: false }))}
+                    className="accent-amber-600"
+                  />
+                  Deceased
+                </label>
+              </div>
+            </div>
+
+            {/* Birth / Death year */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-amber-800 dark:text-amber-200 mb-1">Birth Year</label>
+                <input
+                  type="number"
+                  value={intermediateForm.birth_year}
+                  onChange={e => setIntermediateForm(f => ({ ...f, birth_year: e.target.value }))}
+                  placeholder="e.g. 1945"
+                  min="1800" max={new Date().getFullYear()}
+                  className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+              </div>
+              {!intermediateForm.is_living && (
+                <div>
+                  <label className="block text-xs font-medium text-amber-800 dark:text-amber-200 mb-1">Death Year</label>
+                  <input
+                    type="number"
+                    value={intermediateForm.death_year}
+                    onChange={e => setIntermediateForm(f => ({ ...f, death_year: e.target.value }))}
+                    placeholder="e.g. 2005"
+                    min="1800" max={new Date().getFullYear()}
+                    className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Gender */}
+            <div>
+              <label className="block text-xs font-medium text-amber-800 dark:text-amber-200 mb-1">Gender</label>
+              <select
+                value={intermediateForm.gender}
+                onChange={e => setIntermediateForm(f => ({ ...f, gender: e.target.value }))}
+                className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+              >
+                <option value="">Not specified</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {/* Cemetery info (only if deceased) */}
+            {!intermediateForm.is_living && (
+              <div className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-700 rounded-lg p-4 space-y-3">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">⚰️ Cemetery Information <span className="font-normal text-amber-600 dark:text-amber-400">(optional)</span></p>
+                <div>
+                  <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">Cemetery Name</label>
+                  <input
+                    type="text"
+                    value={intermediateForm.cemetery_name}
+                    onChange={e => setIntermediateForm(f => ({ ...f, cemetery_name: e.target.value }))}
+                    placeholder="e.g. Northwood Cemetery or leave blank if unknown"
+                    className="w-full border border-amber-200 dark:border-amber-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">City / State</label>
+                  <input
+                    type="text"
+                    value={intermediateForm.cemetery_location}
+                    onChange={e => setIntermediateForm(f => ({ ...f, cemetery_location: e.target.value }))}
+                    placeholder="e.g. Richmond, VA"
+                    className="w-full border border-amber-200 dark:border-amber-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={submittingIntermediate}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
+              >
+                {submittingIntermediate ? 'Submitting…' : `Add ${intermediateHint.intermediateLabel}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIntermediateHint(null)}
+                className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-xl text-sm transition-colors"
+              >
+                Skip
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Intermediate node submitted confirmation */}
+      {intermediateSubmitted && (
+        <div className="mt-4 p-4 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-600 rounded-xl text-amber-800 dark:text-amber-100 text-sm">
+          <p className="font-semibold mb-1">✓ {intermediateHint?.intermediateLabel} added!</p>
+          <p>Thank you for helping complete the family tree. This connection will be reviewed and added to the tree once approved.</p>
         </div>
       )}
 
