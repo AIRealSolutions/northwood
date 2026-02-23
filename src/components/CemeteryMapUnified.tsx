@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
+import { G2_ROW_PATTERN, H2_ROW_PATTERN } from '@/lib/sectionPatterns';
 
 interface CemeteryMapUnifiedProps {
   highlightPlot?: string;
@@ -18,8 +19,8 @@ const SECTIONS = [
   { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74, splitRow: 37 },
   { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74, splitRow: 37 },
   { id: 'I', name: 'Section I', westRoad: 'Hydrangia', eastRoad: 'Residential', color: 'from-pink-500 to-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200', minRow: 75, splitRow: 37 },
-  { id: 'G2', name: 'Section G2', westRoad: 'Hydrangia', eastRoad: 'Iris', color: 'from-violet-600 to-violet-800', bgColor: 'bg-violet-100', borderColor: 'border-violet-300', maxRow: 386, splitRow: 193, plotWidth: '5ft', note: "Second G Road \u2013 5' wide plots (386 rows, 787 plots)" },
-  { id: 'H2', name: 'Section H2', westRoad: 'Iris', eastRoad: 'Jasmine', color: 'from-purple-600 to-purple-800', bgColor: 'bg-purple-100', borderColor: 'border-purple-300', maxRow: 582, splitRow: 291, plotWidth: '9ft', note: "Second H Road \u2013 9' wide plots (582 rows, 1027 plots)" },
+  { id: 'G2', name: 'Section G2', westRoad: 'Hydrangia', eastRoad: 'Iris', color: 'from-violet-600 to-violet-800', bgColor: 'bg-violet-100', borderColor: 'border-violet-300', maxRow: 386, splitRow: 193, plotWidth: '5ft', note: "Second G Road \u2013 5' wide plots", patternOnly: true, rowPattern: G2_ROW_PATTERN },
+  { id: 'H2', name: 'Section H2', westRoad: 'Iris', eastRoad: 'Jasmine', color: 'from-purple-600 to-purple-800', bgColor: 'bg-purple-100', borderColor: 'border-purple-300', maxRow: 582, splitRow: 291, plotWidth: '9ft', note: "Second H Road \u2013 9' wide plots", patternOnly: true, rowPattern: H2_ROW_PATTERN },
 ];
 
 export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnifiedProps) {
@@ -70,6 +71,11 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     try {
       const plotsData: Record<string, PlotWithDetails[]> = {};
       for (const section of SECTIONS) {
+        // Pattern-only sections (G2, H2) don't have DB records — skip fetch
+        if ('patternOnly' in section && section.patternOnly) {
+          plotsData[section.id] = [];
+          continue;
+        }
         // Section I uses Section H plots (rows 75+)
         const sectionId = section.id === 'I' ? 'H' : section.id;
         const sectionPlots = await plotsAPI.getPlotsBySection(sectionId);
@@ -169,6 +175,35 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     }
   };
 
+  // Renders a single row using only the pattern definition (no DB data)
+  // Shows all positions as available (future/planned plots)
+  const renderPatternRow = (
+    row: number,
+    positionCount: number,
+    facingDirection: 'west' | 'east',
+    sectionColor: string
+  ) => {
+    const positions = Array.from({ length: positionCount }, (_, i) => i + 1);
+    return (
+      <div className="mb-1" key={row}>
+        <div className="text-[8px] text-gray-400 mb-0.5">Row {row}</div>
+        <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
+          <div className="flex gap-0.5">
+            {positions.map((pos) => (
+              <div
+                key={pos}
+                className="w-7 h-5 rounded-sm bg-emerald-300 border border-emerald-400 flex items-center justify-center"
+                title={`Row ${row}, Position ${pos} – Available`}
+              >
+                <span className="text-[7px] font-bold text-emerald-800">{pos}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderRowMatrix = (
     row: number,
     facingDirection: 'west' | 'east',
@@ -223,6 +258,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
   };
 
   const renderSection = (section: typeof SECTIONS[0], index: number) => {
+    const isPatternOnly = 'patternOnly' in section && section.patternOnly;
+    const rowPattern = isPatternOnly && 'rowPattern' in section ? section.rowPattern as Record<number, number> : null;
+
     const plots = allPlots[section.id] || [];
     const plotsByRow: Record<number, PlotWithDetails[]> = {};
     
@@ -236,19 +274,21 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       plotsByRow[parseInt(row)].sort((a, b) => (a.plot_position || 0) - (b.plot_position || 0));
     });
 
-    let allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
-    
-    // Filter rows based on section's minRow and maxRow
-    if (section.minRow) {
-      allRows = allRows.filter(r => r >= section.minRow!);
-    }
-    if (section.maxRow) {
-      allRows = allRows.filter(r => r <= section.maxRow!);
-    }
-    
     const splitRow = ('splitRow' in section && section.splitRow) ? section.splitRow as number : 37;
+
+    // For pattern-only sections, derive rows from the pattern definition
+    let allRows: number[];
+    if (isPatternOnly && rowPattern) {
+      allRows = Object.keys(rowPattern).map(Number).sort((a, b) => a - b);
+    } else {
+      allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
+      if (section.minRow) allRows = allRows.filter(r => r >= section.minRow!);
+      if (section.maxRow) allRows = allRows.filter(r => r <= section.maxRow!);
+    }
+
     const westStripRows = allRows.filter(r => r <= splitRow);
     const eastStripRows = allRows.filter(r => r > splitRow);
+    const totalPatternPlots = isPatternOnly && rowPattern ? Object.values(rowPattern).reduce((a, b) => a + b, 0) : plots.length;
 
     return (
       <div 
@@ -271,8 +311,8 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <p className="text-white/60 text-[9px]">{getPlotWidthLabel(section.id)}</p>
             </div>
             <div className="text-right bg-white/20 rounded-lg px-3 py-1.5">
-              <div className="text-lg font-bold text-white">{plots.length}</div>
-              <div className="text-white/80 text-[10px]">Plots</div>
+              <div className="text-lg font-bold text-white">{totalPatternPlots}</div>
+              <div className="text-white/80 text-[10px]">{isPatternOnly ? 'Planned' : 'Plots'}</div>
             </div>
           </div>
         </div>
@@ -297,7 +337,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <div className="flex justify-start">
                 <div className="inline-block">
                   {[...westStripRows].reverse().map((row) =>
-                    renderRowMatrix(row, 'west', plotsByRow[row] || [], section.borderColor)
+                    isPatternOnly && rowPattern
+                      ? renderPatternRow(row, rowPattern[row] || 1, 'west', section.borderColor)
+                      : renderRowMatrix(row, 'west', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
@@ -313,7 +355,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <div className="flex justify-end">
                 <div className="inline-block">
                   {eastStripRows.map((row) =>
-                    renderRowMatrix(row, 'east', plotsByRow[row] || [], section.borderColor)
+                    isPatternOnly && rowPattern
+                      ? renderPatternRow(row, rowPattern[row] || 1, 'east', section.borderColor)
+                      : renderRowMatrix(row, 'east', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
