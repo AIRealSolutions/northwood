@@ -19,11 +19,9 @@ const SECTIONS = [
   { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm', color: 'from-sky-500 to-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', maxRow: 74, splitRow: 37 },
   { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig', color: 'from-blue-500 to-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', maxRow: 74, splitRow: 37 },
   { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia', color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74, splitRow: 37 },
-  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 386, splitRow: 193, rowPattern: G_ROW_PATTERN },
-  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 582, splitRow: 291, rowPattern: H_ROW_PATTERN },
+  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74, splitRow: 37, breakoutPattern: G_ROW_PATTERN, breakoutLabel: 'G Expansion' },
+  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74, splitRow: 37, breakoutPattern: H_ROW_PATTERN, breakoutLabel: 'H Expansion' },
   { id: 'I', name: 'Section I', westRoad: 'Hydrangia', eastRoad: 'Residential', color: 'from-pink-500 to-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200', minRow: 75, splitRow: 37 },
-  { id: 'G2', name: 'Section G2', westRoad: 'Hydrangia', eastRoad: 'Iris', color: 'from-violet-600 to-violet-800', bgColor: 'bg-violet-100', borderColor: 'border-violet-300', maxRow: 386, splitRow: 193, plotWidth: '5ft', note: "Second G Road \u2013 5' wide plots", patternOnly: true, rowPattern: G2_ROW_PATTERN },
-  { id: 'H2', name: 'Section H2', westRoad: 'Iris', eastRoad: 'Jasmine', color: 'from-purple-600 to-purple-800', bgColor: 'bg-purple-100', borderColor: 'border-purple-300', maxRow: 582, splitRow: 291, plotWidth: '9ft', note: "Second H Road \u2013 9' wide plots", patternOnly: true, rowPattern: H2_ROW_PATTERN },
 ];
 
 export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnifiedProps) {
@@ -318,8 +316,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     const isPatternOnly = 'patternOnly' in section && section.patternOnly;
     const hasRowPattern = 'rowPattern' in section && section.rowPattern;
     const rowPattern = hasRowPattern ? section.rowPattern as Record<number, number> : null;
-    // isHybrid: has a rowPattern but is NOT patternOnly (i.e. real DB records exist for some rows)
     const isHybrid = hasRowPattern && !isPatternOnly;
+    // Breakout: a separate expansion panel shown below the main DB grid
+    const breakoutPattern = 'breakoutPattern' in section ? section.breakoutPattern as Record<number, number> : null;
+    const breakoutLabel = 'breakoutLabel' in section ? section.breakoutLabel as string : '';
 
     const plots = allPlots[section.id] || [];
     const plotsByRow: Record<number, PlotWithDetails[]> = {};
@@ -336,7 +336,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
     const splitRow = ('splitRow' in section && section.splitRow) ? section.splitRow as number : 37;
 
-    // Derive rows from pattern if available (pattern-only or hybrid), else from DB
+    // Derive rows: pattern-only/hybrid use pattern; standard sections use DB rows
     let allRows: number[];
     if (rowPattern) {
       allRows = Object.keys(rowPattern).map(Number).sort((a, b) => a - b);
@@ -348,10 +348,16 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
     const westStripRows = allRows.filter(r => r <= splitRow);
     const eastStripRows = allRows.filter(r => r > splitRow);
-    // Total plot count: use pattern total for pattern/hybrid sections, DB count otherwise
     const totalPatternPlots = rowPattern
       ? Object.values(rowPattern).reduce((a, b) => a + b, 0)
       : plots.length;
+
+    // Breakout rows: all rows in the breakout pattern, split at midpoint
+    const breakoutRows = breakoutPattern ? Object.keys(breakoutPattern).map(Number).sort((a, b) => a - b) : [];
+    const breakoutSplit = breakoutRows.length > 0 ? breakoutRows[Math.floor(breakoutRows.length / 2)] : 0;
+    const breakoutWest = [...breakoutRows].filter(r => r <= breakoutSplit).reverse();
+    const breakoutEast = breakoutRows.filter(r => r > breakoutSplit);
+    const breakoutTotal = breakoutPattern ? Object.values(breakoutPattern).reduce((a, b) => a + b, 0) : 0;
 
     return (
       <div 
@@ -374,9 +380,11 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <p className="text-white/60 text-[9px]">{getPlotWidthLabel(section.id)}</p>
             </div>
             <div className="text-right bg-white/20 rounded-lg px-3 py-1.5">
-              <div className="text-lg font-bold text-white">{totalPatternPlots}</div>
+              <div className="text-lg font-bold text-white">
+                {isPatternOnly ? totalPatternPlots : plots.length}
+              </div>
               <div className="text-white/80 text-[10px]">
-                {isPatternOnly ? 'Planned' : isHybrid ? `${plots.length} in DB` : 'Plots'}
+                {isPatternOnly ? 'Planned' : 'Plots'}
               </div>
             </div>
           </div>
@@ -402,11 +410,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <div className="flex justify-start">
                 <div className="inline-block">
                   {[...westStripRows].reverse().map((row) =>
-                    isPatternOnly && rowPattern
-                      ? renderPatternRow(row, rowPattern[row] || 1, 'west', section.borderColor)
-                      : isHybrid && rowPattern
-                        ? renderHybridRow(row, rowPattern[row] || 1, plotsByRow[row] || [], section.borderColor)
-                        : renderRowMatrix(row, 'west', plotsByRow[row] || [], section.borderColor)
+                    renderRowMatrix(row, 'west', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
@@ -422,11 +426,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <div className="flex justify-end">
                 <div className="inline-block">
                   {eastStripRows.map((row) =>
-                    isPatternOnly && rowPattern
-                      ? renderPatternRow(row, rowPattern[row] || 1, 'east', section.borderColor)
-                      : isHybrid && rowPattern
-                        ? renderHybridRow(row, rowPattern[row] || 1, plotsByRow[row] || [], section.borderColor)
-                        : renderRowMatrix(row, 'east', plotsByRow[row] || [], section.borderColor)
+                    renderRowMatrix(row, 'east', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
@@ -440,6 +440,48 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
           </div>
         </div>
+
+        {/* Breakout Expansion Panel — pattern-defined future plots */}
+        {breakoutPattern && breakoutRows.length > 0 && (
+          <div className="mt-2 bg-white rounded-lg shadow-md p-1 border-2 border-dashed border-emerald-400">
+            <div className="flex items-center justify-between mb-1 px-1">
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">
+                {breakoutLabel} — Planned Layout
+              </span>
+              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                {breakoutTotal} planned plots
+              </span>
+            </div>
+            <div className="flex gap-1">
+              {/* West breakout strip */}
+              <div className="flex-1 bg-emerald-50 rounded p-1 border border-emerald-200">
+                <div className="text-center mb-1">
+                  <span className="text-[9px] font-semibold text-emerald-600">Rows 1–{breakoutSplit} ↑</span>
+                </div>
+                <div className="flex justify-start">
+                  <div className="inline-block">
+                    {breakoutWest.map((row) =>
+                      renderPatternRow(row, breakoutPattern[row] || 1, 'west', 'border-emerald-300')
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* East breakout strip */}
+              <div className="flex-1 bg-emerald-50 rounded p-1 border border-emerald-200">
+                <div className="text-center mb-1">
+                  <span className="text-[9px] font-semibold text-emerald-600">Rows {breakoutSplit + 1}+ ↓</span>
+                </div>
+                <div className="flex justify-end">
+                  <div className="inline-block">
+                    {breakoutEast.map((row) =>
+                      renderPatternRow(row, breakoutPattern[row] || 1, 'east', 'border-emerald-300')
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Road Gap (maximized spacing between sections) */}
         {index < SECTIONS.length - 1 && (
