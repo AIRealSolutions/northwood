@@ -113,17 +113,16 @@ function buildSpouseMap(nodes: TreeNode[], relationships: TreeRelationship[]) {
 }
 
 /**
- * Full top-down hierarchical layout with dual-parent support.
+ * Bidirectional hierarchical layout.
  *
- * Strategy:
- *  1. Find the true root(s): nodes that have NO parents in the tree.
- *     If the user has pinned a rootId, use that; otherwise pick the node
- *     with the most descendants as the primary root.
- *  2. BFS to assign generation depths (row numbers).
- *  3. Post-order recursive x-positioning so each parent is centred over
- *     its children.  When two spouses share children, they are placed
- *     side-by-side and their children are centred under the couple.
- *  4. Orphan nodes (disconnected) go in a row below the main tree.
+ * When a rootId is provided (user clicked "Center Tree on This Person"),
+ * the selected person is placed at generation 0.  Parents go to generation
+ * -1, grandparents to -2, etc.  Children go to generation +1, etc.
+ * This means ancestors always render ABOVE the focal person and
+ * descendants always render BELOW, regardless of how the data was entered.
+ *
+ * When no rootId is provided, the oldest ancestor (node with no parents)
+ * is used as the top-most root and the tree flows downward only.
  */
 function buildLayout(
   nodes: TreeNode[],
@@ -136,21 +135,20 @@ function buildLayout(
   const { childrenOf, parentsOf } = buildAdjacency(nodes, relationships);
   const spouseOf = buildSpouseMap(nodes, relationships);
 
-  // ── Step 1: Choose root ───────────────────────────────────────────────────
-  // Prefer the pinned rootId; otherwise use the node with no parents that
-  // has the most descendants (i.e. the oldest known ancestor).
+  // ── Step 1: Choose focal node ────────────────────────────────────────
   let rootNodeId: string;
-  if (rootId && nodeMap.has(rootId)) {
-    rootNodeId = rootId;
+  const hasPinnedRoot = !!(rootId && nodeMap.has(rootId));
+
+  if (hasPinnedRoot) {
+    rootNodeId = rootId!;
   } else {
-    // Find all nodes with no parents
+    // Default: pick the oldest ancestor (no parents, most descendants)
     const roots = nodes.filter(n => (parentsOf.get(n.id) ?? []).length === 0);
     if (roots.length === 0) {
       rootNodeId = nodes[0].id;
     } else if (roots.length === 1) {
       rootNodeId = roots[0].id;
     } else {
-      // Pick the root with the most descendants
       function countDesc(id: string, seen = new Set<string>()): number {
         if (seen.has(id)) return 0;
         seen.add(id);
@@ -162,32 +160,43 @@ function buildLayout(
     }
   }
 
-  // ── Step 2: BFS to assign depths ─────────────────────────────────────────
-  // Spouses of a node share the same depth.
+  // ── Step 2: Bidirectional BFS to assign depths ─────────────────────────
+  // When hasPinnedRoot: parents get negative depth (above), children positive (below).
+  // When no pinned root: only traverse downward (parents are the roots themselves).
   const depth   = new Map<string, number>();
   const visited = new Set<string>();
-  const bfsQueue: string[] = [rootNodeId];
+  // Queue entries: [nodeId, depth]
+  const bfsQueue: [string, number][] = [[rootNodeId, 0]];
   depth.set(rootNodeId, 0);
   visited.add(rootNodeId);
 
   while (bfsQueue.length > 0) {
-    const cur = bfsQueue.shift()!;
-    const d   = depth.get(cur)!;
+    const [cur, d] = bfsQueue.shift()!;
 
     // Spread depth to spouses (same generation)
     for (const sp of spouseOf.get(cur) ?? []) {
       if (!visited.has(sp)) {
         visited.add(sp);
         depth.set(sp, d);
-        bfsQueue.push(sp);
+        bfsQueue.push([sp, d]);
       }
     }
-    // Spread depth to children (next generation)
+    // Traverse DOWNWARD to children (positive depth = below)
     for (const child of childrenOf.get(cur) ?? []) {
       if (!visited.has(child)) {
         visited.add(child);
         depth.set(child, d + 1);
-        bfsQueue.push(child);
+        bfsQueue.push([child, d + 1]);
+      }
+    }
+    // Traverse UPWARD to parents (negative depth = above) — only when pinned root
+    if (hasPinnedRoot) {
+      for (const parent of parentsOf.get(cur) ?? []) {
+        if (!visited.has(parent)) {
+          visited.add(parent);
+          depth.set(parent, d - 1);
+          bfsQueue.push([parent, d - 1]);
+        }
       }
     }
   }
@@ -253,29 +262,32 @@ function buildLayout(
   assignX(rootNodeId);
 
   // ── Step 4: Build LayoutNode list ─────────────────────────────────────────
+  // Normalize depths so the minimum is 0 (ancestors can have negative depth)
+  const minDepth = depth.size > 0 ? Math.min(...depth.values()) : 0;
   const layout: LayoutNode[] = [];
   for (const [id, d] of depth.entries()) {
     const node = nodeMap.get(id)!;
+    const normalizedDepth = d - minDepth; // shift so min depth = row 0 (top)
     layout.push({
       ...node,
-      generation: d,
+      generation: d,  // keep original for reference
       col: 0,
       x: xPos.get(id) ?? 0,
-      y: d * (NODE_H + V_GAP),
+      y: normalizedDepth * (NODE_H + V_GAP),
     });
   }
 
-  // ── Step 5: Orphan nodes below the main tree ──────────────────────────────
-  const maxDepth = layout.reduce((m, n) => Math.max(m, n.generation), 0);
+  // ── Step 5: Orphan nodes below the main tree ────────────────────────────
+  const maxNormDepth = layout.reduce((m, n) => Math.max(m, n.y / (NODE_H + V_GAP)), 0);
   let orphanCol = 0;
   for (const n of nodes) {
     if (!visited.has(n.id)) {
       layout.push({
         ...n,
-        generation: maxDepth + 2,
+        generation: Math.round(maxNormDepth) + 2,
         col: orphanCol,
         x: orphanCol * (NODE_W + H_GAP),
-        y: (maxDepth + 2) * (NODE_H + V_GAP),
+        y: (maxNormDepth + 2) * (NODE_H + V_GAP),
       });
       orphanCol++;
     }
