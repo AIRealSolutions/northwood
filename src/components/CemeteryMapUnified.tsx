@@ -3,11 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
-import { G2_ROW_PATTERN, H2_ROW_PATTERN } from '@/lib/sectionPatterns';
-// G and H use the same patterns as G2 and H2 (same plat layout)
-const G_ROW_PATTERN = G2_ROW_PATTERN;
-const H_ROW_PATTERN = H2_ROW_PATTERN;
-
 interface CemeteryMapUnifiedProps {
   highlightPlot?: string;
 }
@@ -19,8 +14,8 @@ const SECTIONS = [
   { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm', color: 'from-sky-500 to-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', maxRow: 74, splitRow: 37 },
   { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig', color: 'from-blue-500 to-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', maxRow: 74, splitRow: 37 },
   { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia', color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74, splitRow: 37 },
-  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74, splitRow: 37, breakoutPattern: G_ROW_PATTERN, breakoutLabel: 'G Expansion' },
-  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74, splitRow: 37, breakoutPattern: H_ROW_PATTERN, breakoutLabel: 'H Expansion' },
+  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74, splitRow: 37 },
+  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74, splitRow: 37 },
   { id: 'I', name: 'Section I', westRoad: 'Hydrangia', eastRoad: 'Residential', color: 'from-pink-500 to-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200', minRow: 75, splitRow: 37 },
 ];
 
@@ -72,11 +67,6 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     try {
       const plotsData: Record<string, PlotWithDetails[]> = {};
       for (const section of SECTIONS) {
-        // Pattern-only sections (G2, H2) don't have DB records — skip fetch
-        if ('patternOnly' in section && section.patternOnly) {
-          plotsData[section.id] = [];
-          continue;
-        }
         // Section I uses Section H plots (rows 75+)
         const sectionId = section.id === 'I' ? 'H' : section.id;
         const sectionPlots = await plotsAPI.getPlotsBySection(sectionId);
@@ -92,8 +82,8 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
   // Helper to get plot width label for a section
   const getPlotWidthLabel = (sectionId: string): string => {
-    if (sectionId === 'H' || sectionId === 'H2') return "9' plots";
-    if (sectionId === 'G' || sectionId === 'G2') return "5' plots";
+    if (sectionId === 'H') return "9' plots";
+    if (sectionId === 'G') return "5' plots";
     return "4' plots";
   };
 
@@ -176,89 +166,6 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     }
   };
 
-  // Renders a row using pattern positions but overlays real DB records where they exist.
-  // DB-backed plots are clickable links; unrecorded positions show as empty green slots.
-  const renderHybridRow = (
-    row: number,
-    positionCount: number,
-    rowPlots: PlotWithDetails[],
-    sectionColor: string
-  ) => {
-    const positions = Array.from({ length: positionCount }, (_, i) => i + 1);
-    return (
-      <div className="mb-1" key={row}>
-        <div className="text-[8px] text-gray-500 mb-0.5">Row {row}</div>
-        <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
-          <div className="flex gap-0.5">
-            {positions.map((pos) => {
-              const plot = rowPlots.find(p => p.plot_position === pos);
-              if (plot) {
-                const deceasedName = getDeceasedName(plot);
-                return (
-                  <div
-                    key={pos}
-                    ref={(el) => { plotRefs.current[plot.plot_number] = el; }}
-                  >
-                    <Link
-                      href={`/plot/${plot.id}`}
-                      className={`
-                        w-7 h-5 rounded-sm flex items-center justify-center
-                        text-white shadow-sm border
-                        transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10
-                        ${getStatusColor(plot.status)}
-                      `}
-                      title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                    >
-                      <span className="text-[7px] font-bold">{pos}</span>
-                    </Link>
-                  </div>
-                );
-              }
-              return (
-                <div
-                  key={pos}
-                  className="w-7 h-5 rounded-sm bg-emerald-200 border border-emerald-300 flex items-center justify-center"
-                  title={`Row ${row}, Position ${pos} \u2013 Available`}
-                >
-                  <span className="text-[7px] text-emerald-700">{pos}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Renders a single row using only the pattern definition (no DB data)
-  // Shows all positions as available (future/planned plots)
-  const renderPatternRow = (
-    row: number,
-    positionCount: number,
-    facingDirection: 'west' | 'east',
-    sectionColor: string
-  ) => {
-    const positions = Array.from({ length: positionCount }, (_, i) => i + 1);
-    return (
-      <div className="mb-1" key={row}>
-        <div className="text-[8px] text-gray-400 mb-0.5">Row {row}</div>
-        <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
-          <div className="flex gap-0.5">
-            {positions.map((pos) => (
-              <div
-                key={pos}
-                className="w-7 h-5 rounded-sm bg-emerald-300 border border-emerald-400 flex items-center justify-center"
-                title={`Row ${row}, Position ${pos} – Available`}
-              >
-                <span className="text-[7px] font-bold text-emerald-800">{pos}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderRowMatrix = (
     row: number,
     facingDirection: 'west' | 'east',
@@ -313,17 +220,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
   };
 
   const renderSection = (section: typeof SECTIONS[0], index: number) => {
-    const isPatternOnly = 'patternOnly' in section && section.patternOnly;
-    const hasRowPattern = 'rowPattern' in section && section.rowPattern;
-    const rowPattern = hasRowPattern ? section.rowPattern as Record<number, number> : null;
-    const isHybrid = hasRowPattern && !isPatternOnly;
-    // Breakout: a separate expansion panel shown below the main DB grid
-    const breakoutPattern = 'breakoutPattern' in section ? section.breakoutPattern as Record<number, number> : null;
-    const breakoutLabel = 'breakoutLabel' in section ? section.breakoutLabel as string : '';
-
     const plots = allPlots[section.id] || [];
     const plotsByRow: Record<number, PlotWithDetails[]> = {};
-    
+
     plots.forEach(plot => {
       const row = plot.row_number || 1;
       if (!plotsByRow[row]) plotsByRow[row] = [];
@@ -336,28 +235,12 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
     const splitRow = ('splitRow' in section && section.splitRow) ? section.splitRow as number : 37;
 
-    // Derive rows: pattern-only/hybrid use pattern; standard sections use DB rows
-    let allRows: number[];
-    if (rowPattern) {
-      allRows = Object.keys(rowPattern).map(Number).sort((a, b) => a - b);
-    } else {
-      allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
-      if (section.minRow) allRows = allRows.filter(r => r >= section.minRow!);
-      if (section.maxRow) allRows = allRows.filter(r => r <= section.maxRow!);
-    }
+    let allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
+    if (section.minRow) allRows = allRows.filter(r => r >= section.minRow!);
+    if (section.maxRow) allRows = allRows.filter(r => r <= section.maxRow!);
 
     const westStripRows = allRows.filter(r => r <= splitRow);
     const eastStripRows = allRows.filter(r => r > splitRow);
-    const totalPatternPlots = rowPattern
-      ? Object.values(rowPattern).reduce((a, b) => a + b, 0)
-      : plots.length;
-
-    // Breakout rows: all rows in the breakout pattern, split at midpoint
-    const breakoutRows = breakoutPattern ? Object.keys(breakoutPattern).map(Number).sort((a, b) => a - b) : [];
-    const breakoutSplit = breakoutRows.length > 0 ? breakoutRows[Math.floor(breakoutRows.length / 2)] : 0;
-    const breakoutWest = [...breakoutRows].filter(r => r <= breakoutSplit).reverse();
-    const breakoutEast = breakoutRows.filter(r => r > breakoutSplit);
-    const breakoutTotal = breakoutPattern ? Object.values(breakoutPattern).reduce((a, b) => a + b, 0) : 0;
 
     return (
       <div 
@@ -380,12 +263,8 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <p className="text-white/60 text-[9px]">{getPlotWidthLabel(section.id)}</p>
             </div>
             <div className="text-right bg-white/20 rounded-lg px-3 py-1.5">
-              <div className="text-lg font-bold text-white">
-                {isPatternOnly ? totalPatternPlots : plots.length}
-              </div>
-              <div className="text-white/80 text-[10px]">
-                {isPatternOnly ? 'Planned' : 'Plots'}
-              </div>
+              <div className="text-lg font-bold text-white">{plots.length}</div>
+              <div className="text-white/80 text-[10px]">Plots</div>
             </div>
           </div>
         </div>
@@ -440,48 +319,6 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
           </div>
         </div>
-
-        {/* Breakout Expansion Panel — pattern-defined future plots */}
-        {breakoutPattern && breakoutRows.length > 0 && (
-          <div className="mt-2 bg-white rounded-lg shadow-md p-1 border-2 border-dashed border-emerald-400">
-            <div className="flex items-center justify-between mb-1 px-1">
-              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">
-                {breakoutLabel} — Planned Layout
-              </span>
-              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                {breakoutTotal} planned plots
-              </span>
-            </div>
-            <div className="flex gap-1">
-              {/* West breakout strip */}
-              <div className="flex-1 bg-emerald-50 rounded p-1 border border-emerald-200">
-                <div className="text-center mb-1">
-                  <span className="text-[9px] font-semibold text-emerald-600">Rows 1–{breakoutSplit} ↑</span>
-                </div>
-                <div className="flex justify-start">
-                  <div className="inline-block">
-                    {breakoutWest.map((row) =>
-                      renderPatternRow(row, breakoutPattern[row] || 1, 'west', 'border-emerald-300')
-                    )}
-                  </div>
-                </div>
-              </div>
-              {/* East breakout strip */}
-              <div className="flex-1 bg-emerald-50 rounded p-1 border border-emerald-200">
-                <div className="text-center mb-1">
-                  <span className="text-[9px] font-semibold text-emerald-600">Rows {breakoutSplit + 1}+ ↓</span>
-                </div>
-                <div className="flex justify-end">
-                  <div className="inline-block">
-                    {breakoutEast.map((row) =>
-                      renderPatternRow(row, breakoutPattern[row] || 1, 'east', 'border-emerald-300')
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Road Gap (maximized spacing between sections) */}
         {index < SECTIONS.length - 1 && (
