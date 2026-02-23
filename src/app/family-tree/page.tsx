@@ -42,16 +42,32 @@ const NODE_H = 72;
 const H_GAP  = 56;   // horizontal gap between sibling nodes
 const V_GAP  = 120;  // vertical gap between generations
 
-// ─── Relationship classification ─────────────────────────────────────────────
-// DOWNWARD: person_a is the PARENT, person_b is the CHILD
+// ─── Relationship classification ─────────────────────────────────────────
+// DOWNWARD: person_a is the ANCESTOR, person_b is the DESCENDANT
+// i.e. person_a sits ABOVE person_b in the tree
 const DOWNWARD_RELS = new Set([
-  'parent', 'grandparent', 'great_grandparent', 'great_great_grandparent', 'step_parent',
+  // Generic
+  'parent', 'grandparent', 'great_grandparent', 'great_great_grandparent',
+  'step_parent', 'adoptive_parent', 'parent_in_law', 'godparent', 'ancestor',
+  // Specific paternal upline
+  'father',
+  'paternal_grandfather', 'paternal_grandmother',
+  'paternal_great_grandfather', 'paternal_great_grandmother',
+  'paternal_2x_great_grandfather', 'paternal_2x_great_grandmother',
+  // Specific maternal upline
+  'mother',
+  'maternal_grandfather', 'maternal_grandmother',
+  'maternal_great_grandfather', 'maternal_great_grandmother',
+  'maternal_2x_great_grandfather', 'maternal_2x_great_grandmother',
 ]);
-// UPWARD: person_a is the CHILD, person_b is the PARENT
+// UPWARD: person_a is the DESCENDANT, person_b is the ANCESTOR
+// i.e. person_b sits ABOVE person_a in the tree
 const UPWARD_RELS = new Set([
-  'child', 'grandchild', 'great_grandchild', 'great_great_grandchild', 'step_child',
+  // Generic
+  'child', 'grandchild', 'great_grandchild', 'great_great_grandchild',
+  'step_child', 'adoptive_child', 'child_in_law', 'godchild', 'descendant',
 ]);
-const SPOUSE_RELS = new Set(['spouse', 'in_law']);
+const SPOUSE_RELS = new Set(['spouse', 'partner', 'in_law', 'sibling_in_law']);
 
 // ─── Build parent→children and child→parents maps ────────────────────────────
 function buildAdjacency(nodes: TreeNode[], relationships: TreeRelationship[]) {
