@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
@@ -9,7 +9,7 @@ import { useSearchParams } from 'next/navigation';
 interface TreeNode {
   id: string;
   deceased_id?: string | null;
-  plot_id?: string | null;  // resolved from deceased_records join
+  plot_id?: string | null;
   first_name: string;
   middle_name?: string | null;
   last_name: string;
@@ -19,7 +19,7 @@ interface TreeNode {
   is_living: boolean;
   gender?: string | null;
   status: string;
-  deceased_records?: { id: string; plot_id: string } | null; // joined
+  deceased_records?: { id: string; plot_id: string } | null;
 }
 
 interface TreeRelationship {
@@ -31,514 +31,241 @@ interface TreeRelationship {
   notes?: string | null;
 }
 
-interface LayoutNode extends TreeNode {
-  x: number;
-  y: number;
-  generation: number;
-  col: number;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fullName(n: TreeNode) {
+  const parts = [n.first_name, n.middle_name, n.last_name].filter(Boolean).join(' ');
+  return n.maiden_name ? `${parts} (née ${n.maiden_name})` : parts;
 }
 
-// ─── Layout constants ─────────────────────────────────────────────────────────
-const NODE_W = 160;
-const NODE_H = 72;
-const H_GAP  = 56;   // horizontal gap between sibling nodes
-const V_GAP  = 120;  // vertical gap between generations
-
-// ─── Relationship classification ─────────────────────────────────────────
-// DOWNWARD: person_a is the ANCESTOR, person_b is the DESCENDANT
-// i.e. person_a sits ABOVE person_b in the tree
-const DOWNWARD_RELS = new Set([
-  // Generic
-  'parent', 'grandparent', 'great_grandparent', 'great_great_grandparent',
-  'step_parent', 'adoptive_parent', 'parent_in_law', 'godparent', 'ancestor',
-  // Specific paternal upline
-  'father',
-  'paternal_grandfather', 'paternal_grandmother',
-  'paternal_great_grandfather', 'paternal_great_grandmother',
-  'paternal_2x_great_grandfather', 'paternal_2x_great_grandmother',
-  // Specific maternal upline
-  'mother',
-  'maternal_grandfather', 'maternal_grandmother',
-  'maternal_great_grandfather', 'maternal_great_grandmother',
-  'maternal_2x_great_grandfather', 'maternal_2x_great_grandmother',
-]);
-// UPWARD: person_a is the DESCENDANT, person_b is the ANCESTOR
-// i.e. person_b sits ABOVE person_a in the tree
-const UPWARD_RELS = new Set([
-  // Generic
-  'child', 'grandchild', 'great_grandchild', 'great_great_grandchild',
-  'step_child', 'adoptive_child', 'child_in_law', 'godchild', 'descendant',
-]);
-const SPOUSE_RELS = new Set(['spouse', 'partner', 'in_law', 'sibling_in_law']);
-
-// ─── Build parent→children and child→parents maps ────────────────────────────
-function buildAdjacency(nodes: TreeNode[], relationships: TreeRelationship[]) {
-  const nodeIds = new Set(nodes.map(n => n.id));
-  // childrenOf[parentId] = [childId, ...]
-  const childrenOf = new Map<string, string[]>();
-  // parentsOf[childId]  = [parentId, ...]
-  const parentsOf  = new Map<string, string[]>();
-  for (const n of nodes) { childrenOf.set(n.id, []); parentsOf.set(n.id, []); }
-
-  for (const rel of relationships) {
-    if (SPOUSE_RELS.has(rel.relationship_type)) continue;
-    let parentId: string | null = null;
-    let childId:  string | null = null;
-
-    if (DOWNWARD_RELS.has(rel.relationship_type)) {
-      parentId = rel.person_a_id; childId = rel.person_b_id;
-    } else if (UPWARD_RELS.has(rel.relationship_type)) {
-      childId = rel.person_a_id; parentId = rel.person_b_id;
-    }
-
-    if (parentId && childId && nodeIds.has(parentId) && nodeIds.has(childId)) {
-      if (!childrenOf.get(parentId)!.includes(childId))
-        childrenOf.get(parentId)!.push(childId);
-      if (!parentsOf.get(childId)!.includes(parentId))
-        parentsOf.get(childId)!.push(parentId);
-    }
-  }
-  return { childrenOf, parentsOf };
+function lifespan(n: TreeNode) {
+  if (!n.birth_year && !n.death_year) return null;
+  const b = n.birth_year ?? '?';
+  const d = n.is_living ? 'present' : (n.death_year ?? '?');
+  return `${b} – ${d}`;
 }
 
-// ─── Spouse map: spouseOf[id] = [spouseId, ...] ───────────────────────────────
-function buildSpouseMap(nodes: TreeNode[], relationships: TreeRelationship[]) {
-  const spouseOf = new Map<string, string[]>();
-  for (const n of nodes) spouseOf.set(n.id, []);
-  for (const rel of relationships) {
-    if (!SPOUSE_RELS.has(rel.relationship_type)) continue;
-    const a = rel.person_a_id, b = rel.person_b_id;
-    if (!spouseOf.get(a)!.includes(b)) spouseOf.get(a)!.push(b);
-    if (!spouseOf.get(b)!.includes(a)) spouseOf.get(b)!.push(a);
-  }
-  return spouseOf;
+function genderColor(g?: string | null) {
+  if (g === 'male') return 'border-blue-400 bg-blue-50 dark:bg-blue-950/30';
+  if (g === 'female') return 'border-pink-400 bg-pink-50 dark:bg-pink-950/30';
+  return 'border-gray-300 bg-white dark:bg-gray-800';
 }
 
-/**
- * Bidirectional hierarchical layout.
- *
- * When a rootId is provided (user clicked "Center Tree on This Person"),
- * the selected person is placed at generation 0.  Parents go to generation
- * -1, grandparents to -2, etc.  Children go to generation +1, etc.
- * This means ancestors always render ABOVE the focal person and
- * descendants always render BELOW, regardless of how the data was entered.
- *
- * When no rootId is provided, the oldest ancestor (node with no parents)
- * is used as the top-most root and the tree flows downward only.
- */
-function buildLayout(
-  nodes: TreeNode[],
-  relationships: TreeRelationship[],
-  rootId?: string,
-): LayoutNode[] {
-  if (nodes.length === 0) return [];
+function genderDot(g?: string | null) {
+  if (g === 'male') return 'bg-blue-400';
+  if (g === 'female') return 'bg-pink-400';
+  return 'bg-gray-400';
+}
 
+function formatRelLabel(rel: string) {
+  return rel.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ─── Relationship adjacency builder ──────────────────────────────────────────
+function buildMaps(nodes: TreeNode[], rels: TreeRelationship[]) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
-  const { childrenOf, parentsOf } = buildAdjacency(nodes, relationships);
-  const spouseOf = buildSpouseMap(nodes, relationships);
 
-  // ── Step 1: Choose focal node ────────────────────────────────────────
-  let rootNodeId: string;
-  const hasPinnedRoot = !!(rootId && nodeMap.has(rootId));
+  // For each node: who are their parents, children, spouses, and other connections
+  const parentsOf = new Map<string, { node: TreeNode; rel: string }[]>();
+  const childrenOf = new Map<string, { node: TreeNode; rel: string }[]>();
+  const spousesOf = new Map<string, { node: TreeNode; rel: string }[]>();
+  const othersOf = new Map<string, { node: TreeNode; rel: string }[]>();
 
-  if (hasPinnedRoot) {
-    rootNodeId = rootId!;
-  } else {
-    // Default: pick the oldest ancestor (no parents, most descendants)
-    const roots = nodes.filter(n => (parentsOf.get(n.id) ?? []).length === 0);
-    if (roots.length === 0) {
-      rootNodeId = nodes[0].id;
-    } else if (roots.length === 1) {
-      rootNodeId = roots[0].id;
-    } else {
-      function countDesc(id: string, seen = new Set<string>()): number {
-        if (seen.has(id)) return 0;
-        seen.add(id);
-        return (childrenOf.get(id) ?? []).reduce((s, c) => s + 1 + countDesc(c, seen), 0);
-      }
-      rootNodeId = roots.reduce((best, n) =>
-        countDesc(n.id) >= countDesc(best.id) ? n : best
-      ).id;
-    }
+  const SPOUSE_TYPES = new Set(['spouse', 'domestic_partner', 'partner']);
+  const PARENT_TYPES = new Set([
+    'parent', 'father', 'mother', 'step_parent', 'adoptive_parent', 'godparent',
+    'paternal_grandfather', 'paternal_grandmother', 'maternal_grandfather', 'maternal_grandmother',
+    'paternal_great_grandfather', 'paternal_great_grandmother',
+    'maternal_great_grandfather', 'maternal_great_grandmother',
+    'paternal_2x_great_grandfather', 'paternal_2x_great_grandmother',
+    'maternal_2x_great_grandfather', 'maternal_2x_great_grandmother',
+    'grandparent', 'great_grandparent', 'great_great_grandparent', 'ancestor',
+    'parent_in_law',
+  ]);
+  const CHILD_TYPES = new Set([
+    'child', 'son', 'daughter', 'step_child', 'adoptive_child', 'godchild',
+    'grandchild', 'great_grandchild', 'great_great_grandchild', 'descendant',
+    'child_in_law',
+  ]);
+
+  function addTo(map: Map<string, { node: TreeNode; rel: string }[]>, id: string, entry: { node: TreeNode; rel: string }) {
+    if (!map.has(id)) map.set(id, []);
+    map.get(id)!.push(entry);
   }
 
-  // ── Step 2: Bidirectional BFS to assign depths ─────────────────────────
-  // When hasPinnedRoot: parents get negative depth (above), children positive (below).
-  // When no pinned root: only traverse downward (parents are the roots themselves).
-  const depth   = new Map<string, number>();
-  const visited = new Set<string>();
-  // Queue entries: [nodeId, depth]
-  const bfsQueue: [string, number][] = [[rootNodeId, 0]];
-  depth.set(rootNodeId, 0);
-  visited.add(rootNodeId);
-
-  while (bfsQueue.length > 0) {
-    const [cur, d] = bfsQueue.shift()!;
-
-    // Spread depth to spouses (same generation)
-    for (const sp of spouseOf.get(cur) ?? []) {
-      if (!visited.has(sp)) {
-        visited.add(sp);
-        depth.set(sp, d);
-        bfsQueue.push([sp, d]);
-      }
-    }
-    // Traverse DOWNWARD to children (positive depth = below)
-    for (const child of childrenOf.get(cur) ?? []) {
-      if (!visited.has(child)) {
-        visited.add(child);
-        depth.set(child, d + 1);
-        bfsQueue.push([child, d + 1]);
-      }
-    }
-    // Traverse UPWARD to parents (negative depth = above) — only when pinned root
-    if (hasPinnedRoot) {
-      for (const parent of parentsOf.get(cur) ?? []) {
-        if (!visited.has(parent)) {
-          visited.add(parent);
-          depth.set(parent, d - 1);
-          bfsQueue.push([parent, d - 1]);
-        }
-      }
-    }
-  }
-
-  // ── Step 3: Recursive x-positioning ──────────────────────────────────────
-  // We build a "couple unit" concept: if two spouses share children, they
-  // are treated as a single unit and their children are centred under them.
-  let leafCounter = 0;
-  const xPos = new Map<string, number>();
-  const placed = new Set<string>();
-
-  // Returns all children of a couple (union of both parents' children)
-  function coupleChildren(aId: string, bId: string | null): string[] {
-    const ac = childrenOf.get(aId) ?? [];
-    if (!bId) return ac;
-    const bc = childrenOf.get(bId) ?? [];
-    return [...new Set([...ac, ...bc])];
-  }
-
-  function assignX(nodeId: string): void {
-    if (placed.has(nodeId)) return;
-    placed.add(nodeId);
-
-    // Find this node's spouse (first spouse only for layout purposes)
-    const spouses = spouseOf.get(nodeId) ?? [];
-    const spouseId = spouses.length > 0 ? spouses[0] : null;
-
-    // Mark spouse as placed too so we don't double-process
-    if (spouseId) placed.add(spouseId);
-
-    const children = coupleChildren(nodeId, spouseId);
-
-    if (children.length === 0) {
-      // Leaf couple (or single leaf)
-      if (spouseId) {
-        // Place as a pair side-by-side
-        xPos.set(nodeId,   leafCounter * (NODE_W + H_GAP));
-        xPos.set(spouseId, leafCounter * (NODE_W + H_GAP) + NODE_W + H_GAP);
-        leafCounter += 2;
-      } else {
-        xPos.set(nodeId, leafCounter * (NODE_W + H_GAP));
-        leafCounter++;
-      }
-    } else {
-      // Recurse into children first
-      for (const c of children) assignX(c);
-
-      const firstX = xPos.get(children[0])!;
-      const lastX  = xPos.get(children[children.length - 1])!;
-      const midX   = (firstX + lastX) / 2;
-
-      if (spouseId) {
-        // Centre the couple over their children
-        const coupleSpan = NODE_W + H_GAP; // space between the two parents
-        xPos.set(nodeId,   midX - coupleSpan / 2);
-        xPos.set(spouseId, midX + coupleSpan / 2);
-      } else {
-        xPos.set(nodeId, midX);
-      }
-    }
-  }
-
-  assignX(rootNodeId);
-
-  // ── Step 4: Build LayoutNode list ─────────────────────────────────────────
-  // Normalize depths so the minimum is 0 (ancestors can have negative depth)
-  const minDepth = depth.size > 0 ? Math.min(...depth.values()) : 0;
-  const layout: LayoutNode[] = [];
-  for (const [id, d] of depth.entries()) {
-    const node = nodeMap.get(id)!;
-    const normalizedDepth = d - minDepth; // shift so min depth = row 0 (top)
-    layout.push({
-      ...node,
-      generation: d,  // keep original for reference
-      col: 0,
-      x: xPos.get(id) ?? 0,
-      y: normalizedDepth * (NODE_H + V_GAP),
-    });
-  }
-
-  // ── Step 5: Orphan nodes below the main tree ────────────────────────────
-  const maxNormDepth = layout.reduce((m, n) => Math.max(m, n.y / (NODE_H + V_GAP)), 0);
-  let orphanCol = 0;
-  for (const n of nodes) {
-    if (!visited.has(n.id)) {
-      layout.push({
-        ...n,
-        generation: Math.round(maxNormDepth) + 2,
-        col: orphanCol,
-        x: orphanCol * (NODE_W + H_GAP),
-        y: (maxNormDepth + 2) * (NODE_H + V_GAP),
-      });
-      orphanCol++;
-    }
-  }
-
-  return layout;
-}
-
-// ─── Compute dual-parent connectors ──────────────────────────────────────────
-// Returns SVG path strings for the "marriage bar + drop to child" connectors.
-// Each entry: { pathD, labelX, labelY, label, isSpouse }
-interface EdgePath {
-  key: string;
-  pathD: string;
-  labelX: number;
-  labelY: number;
-  label: string;
-  isSpouse: boolean;
-}
-
-function buildEdgePaths(
-  layout: LayoutNode[],
-  relationships: TreeRelationship[],
-): EdgePath[] {
-  const layoutMap = new Map(layout.map(n => [n.id, n]));
-  const { childrenOf, parentsOf } = buildAdjacency(layout as TreeNode[], relationships);
-  const spouseOf = buildSpouseMap(layout as TreeNode[], relationships);
-
-  const edges: EdgePath[] = [];
-  const drawnChildren = new Set<string>(); // avoid duplicate child connectors
-
-  // ── Spouse bars ───────────────────────────────────────────────────────────
-  const drawnSpousePairs = new Set<string>();
-  for (const rel of relationships) {
-    if (!SPOUSE_RELS.has(rel.relationship_type)) continue;
-    const pairKey = [rel.person_a_id, rel.person_b_id].sort().join('|');
-    if (drawnSpousePairs.has(pairKey)) continue;
-    drawnSpousePairs.add(pairKey);
-
-    const a = layoutMap.get(rel.person_a_id);
-    const b = layoutMap.get(rel.person_b_id);
+  for (const rel of rels) {
+    const a = nodeMap.get(rel.person_a_id);
+    const b = nodeMap.get(rel.person_b_id);
     if (!a || !b) continue;
 
-    // Draw horizontal dashed line between the two spouses at mid-card height
-    const leftNode  = a.x <= b.x ? a : b;
-    const rightNode = a.x <= b.x ? b : a;
-    const midY = leftNode.y + NODE_H / 2;
-    const x1   = leftNode.x  + NODE_W;
-    const x2   = rightNode.x;
+    const rType = rel.relationship_type;
+    const iType = rel.inverse_type || rel.relationship_type;
 
-    edges.push({
-      key: `spouse-${pairKey}`,
-      pathD: `M ${x1} ${midY} L ${x2} ${midY}`,
-      labelX: (x1 + x2) / 2,
-      labelY: midY - 6,
-      label: rel.relationship_type.replace(/_/g, ' '),
-      isSpouse: true,
-    });
-  }
-
-  // ── Parent→child connectors ───────────────────────────────────────────────
-  for (const [childId, parents] of parentsOf.entries()) {
-    if (parents.length === 0) continue;
-    if (drawnChildren.has(childId)) continue;
-    drawnChildren.add(childId);
-
-    const childNode = layoutMap.get(childId);
-    if (!childNode) continue;
-
-    const childTopX = childNode.x + NODE_W / 2;
-    const childTopY = childNode.y;
-
-    if (parents.length === 1) {
-      // Single parent: simple elbow connector
-      const parentNode = layoutMap.get(parents[0]);
-      if (!parentNode) continue;
-
-      const pBotX = parentNode.x + NODE_W / 2;
-      const pBotY = parentNode.y + NODE_H;
-      const elbowY = pBotY + (childTopY - pBotY) * 0.5;
-
-      edges.push({
-        key: `child-${childId}-single`,
-        pathD: `M ${pBotX} ${pBotY} L ${pBotX} ${elbowY} L ${childTopX} ${elbowY} L ${childTopX} ${childTopY}`,
-        labelX: (pBotX + childTopX) / 2,
-        labelY: elbowY - 4,
-        label: '',
-        isSpouse: false,
-      });
+    if (SPOUSE_TYPES.has(rType)) {
+      addTo(spousesOf, a.id, { node: b, rel: rType });
+      addTo(spousesOf, b.id, { node: a, rel: iType });
+    } else if (PARENT_TYPES.has(rType)) {
+      // person_a is parent of person_b  →  b's parent is a, a's child is b
+      addTo(parentsOf, b.id, { node: a, rel: rType });
+      addTo(childrenOf, a.id, { node: b, rel: iType });
+    } else if (CHILD_TYPES.has(rType)) {
+      // person_a is child of person_b  →  a's parent is b, b's child is a
+      addTo(parentsOf, a.id, { node: b, rel: rType });
+      addTo(childrenOf, b.id, { node: a, rel: iType });
     } else {
-      // Two parents: find the marriage bar midpoint, then drop a line to child
-      // The marriage bar is already drawn above; we just need the vertical drop.
-      const p1 = layoutMap.get(parents[0]);
-      const p2 = layoutMap.get(parents[1]);
-      if (!p1 || !p2) continue;
-
-      // Midpoint between the two parents at their bottom edge
-      const p1BotX = p1.x + NODE_W / 2;
-      const p2BotX = p2.x + NODE_W / 2;
-      const barMidX = (p1BotX + p2BotX) / 2;
-      // Use the marriage bar Y (mid-card) as the starting horizontal reference
-      const barY    = p1.y + NODE_H / 2;
-      const dropStartY = p1.y + NODE_H; // drop from bottom of parent cards
-      const elbowY  = dropStartY + (childTopY - dropStartY) * 0.5;
-
-      // Path: from marriage bar midpoint down to elbow, then to child top
-      edges.push({
-        key: `child-${childId}-dual`,
-        pathD: `M ${barMidX} ${barY} L ${barMidX} ${elbowY} L ${childTopX} ${elbowY} L ${childTopX} ${childTopY}`,
-        labelX: barMidX,
-        labelY: elbowY - 4,
-        label: '',
-        isSpouse: false,
-      });
-      void dropStartY;
+      // Siblings, cousins, aunts/uncles, etc.
+      addTo(othersOf, a.id, { node: b, rel: rType });
+      addTo(othersOf, b.id, { node: a, rel: iType });
     }
   }
 
-  return edges;
+  return { nodeMap, parentsOf, childrenOf, spousesOf, othersOf };
 }
 
-// ─── Node card component ──────────────────────────────────────────────────────
-function NodeCard({
+// ─── PersonCard ───────────────────────────────────────────────────────────────
+function PersonCard({
   node,
-  selected,
   onClick,
+  isFocused = false,
+  size = 'md',
+  relLabel,
 }: {
-  node: LayoutNode;
-  selected: boolean;
+  node: TreeNode;
   onClick: () => void;
+  isFocused?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+  relLabel?: string;
 }) {
-  const isDeceased = !node.is_living;
-  const years =
-    node.birth_year || node.death_year
-      ? `${node.birth_year ?? '?'} – ${node.death_year ?? (isDeceased ? '?' : 'Living')}`
-      : isDeceased ? 'Deceased' : 'Living';
+  const ls = lifespan(node);
+  const plotId = node.plot_id ?? (node.deceased_records?.plot_id ?? null);
+
+  const sizeClasses = {
+    sm: 'p-2 min-w-[120px] max-w-[150px]',
+    md: 'p-3 min-w-[150px] max-w-[180px]',
+    lg: 'p-4 min-w-[180px] max-w-[220px]',
+  };
 
   return (
-    <g
-      transform={`translate(${node.x},${node.y})`}
-      onClick={onClick}
-      style={{ cursor: 'pointer' }}
-    >
-      {/* Shadow */}
-      <rect
-        x={2} y={3}
-        width={NODE_W} height={NODE_H}
-        rx={10} ry={10}
-        fill="rgba(0,0,0,0.08)"
-      />
-      {/* Card background */}
-      <rect
-        x={0} y={0}
-        width={NODE_W} height={NODE_H}
-        rx={10} ry={10}
-        fill={selected ? '#065f46' : isDeceased ? '#f0fdf4' : '#eff6ff'}
-        stroke={selected ? '#059669' : isDeceased ? '#6ee7b7' : '#93c5fd'}
-        strokeWidth={selected ? 2.5 : 1.5}
-      />
-      {/* Gender indicator stripe */}
-      <rect
-        x={0} y={0}
-        width={6} height={NODE_H}
-        rx={10} ry={0}
-        fill={
-          node.gender === 'male' ? '#3b82f6'
-          : node.gender === 'female' ? '#ec4899'
-          : '#9ca3af'
-        }
-      />
-      {/* Cemetery icon for deceased-in-system */}
-      {node.deceased_id && (
-        <text x={NODE_W - 14} y={16} fontSize={11} fill="#6b7280">⚰</text>
+    <div className="flex flex-col items-center gap-1">
+      {relLabel && (
+        <span className="text-xs text-gray-400 dark:text-gray-500 font-medium capitalize">
+          {formatRelLabel(relLabel)}
+        </span>
       )}
-      {/* Name */}
-      <text
-        x={14} y={26}
-        fontSize={12}
-        fontWeight="bold"
-        fill={selected ? '#ffffff' : '#111827'}
-        fontFamily="system-ui, sans-serif"
+      <button
+        onClick={onClick}
+        className={`
+          rounded-xl border-2 shadow-sm transition-all text-left w-full
+          ${sizeClasses[size]}
+          ${isFocused
+            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 shadow-emerald-200 dark:shadow-emerald-900 shadow-md ring-2 ring-emerald-300 dark:ring-emerald-700'
+            : `${genderColor(node.gender)} hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500`
+          }
+        `}
       >
-        {`${node.first_name} ${node.last_name}`.length > 18
-          ? `${node.first_name} ${node.last_name}`.slice(0, 17) + '…'
-          : `${node.first_name} ${node.last_name}`}
-      </text>
-      {/* Maiden name */}
-      {node.maiden_name && (
-        <text x={14} y={40} fontSize={10} fill={selected ? '#a7f3d0' : '#6b7280'} fontFamily="system-ui, sans-serif">
-          née {node.maiden_name}
-        </text>
-      )}
-      {/* Years */}
-      <text
-        x={14}
-        y={node.maiden_name ? 54 : 44}
-        fontSize={10}
-        fill={selected ? '#d1fae5' : '#6b7280'}
-        fontFamily="system-ui, sans-serif"
-      >
-        {years}
-      </text>
-      {/* Living badge */}
-      {node.is_living && (
-        <text x={14} y={62} fontSize={9} fill={selected ? '#a7f3d0' : '#2563eb'} fontFamily="system-ui, sans-serif">
-          Living
-        </text>
-      )}
-    </g>
+        <div className="flex items-start gap-2">
+          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${genderDot(node.gender)}`} />
+          <div className="min-w-0">
+            <p className={`font-bold leading-tight truncate ${size === 'lg' ? 'text-base' : 'text-sm'} ${isFocused ? 'text-emerald-900 dark:text-emerald-100' : 'text-gray-900 dark:text-white'}`}>
+              {node.first_name} {node.last_name}
+            </p>
+            {node.maiden_name && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 truncate">née {node.maiden_name}</p>
+            )}
+            {ls && (
+              <p className={`text-xs mt-0.5 ${isFocused ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-500 dark:text-gray-400'}`}>{ls}</p>
+            )}
+            {plotId && (
+              <span className="inline-block mt-1 text-xs text-gray-400 dark:text-gray-500">⚰ In cemetery</span>
+            )}
+          </div>
+        </div>
+      </button>
+    </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-function FamilyTreeInner() {
+// ─── CollapsibleSection ───────────────────────────────────────────────────────
+function CollapsibleSection({
+  title,
+  count,
+  defaultOpen = true,
+  children,
+  accentColor = 'gray',
+}: {
+  title: string;
+  count: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+  accentColor?: 'blue' | 'purple' | 'green' | 'rose' | 'amber' | 'teal' | 'gray';
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (count === 0) return null;
+
+  const colors = {
+    blue: 'text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    purple: 'text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+    green: 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+    rose: 'text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+    amber: 'text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    teal: 'text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+    gray: 'text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+  };
+
+  return (
+    <div className={`border rounded-xl overflow-hidden ${colors[accentColor]}`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-white/60 dark:bg-gray-800/60 hover:bg-white/80 dark:hover:bg-gray-700/60 transition-colors"
+      >
+        <span className={`text-sm font-semibold ${colors[accentColor].split(' ')[0]}`}>
+          {title}
+          <span className="ml-2 text-xs font-normal opacity-60">{count}</span>
+        </span>
+        <span className="text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-4 py-3 bg-white/40 dark:bg-gray-800/40">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main pedigree view ───────────────────────────────────────────────────────
+function FamilyTreePageInner() {
   const searchParams = useSearchParams();
   const deceasedIdParam = searchParams.get('deceased_id');
 
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [relationships, setRelationships] = useState<TreeRelationship[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
-  const [rootId, setRootId] = useState<string | undefined>();
-  const svgRef = useRef<SVGSVGElement>(null);
+  const [searchResults, setSearchResults] = useState<TreeNode[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
 
-  // Pan / zoom state
-  const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: 1200, h: 700 });
-  const isPanning = useRef(false);
-  const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
-  const loadTree = useCallback(async (searchTerm?: string) => {
+  // Derived maps
+  const [maps, setMaps] = useState<ReturnType<typeof buildMaps> | null>(null);
+
+  // Load all nodes + relationships once
+  const loadTree = useCallback(async () => {
     setLoading(true);
-    setError('');
+    setError(null);
     try {
-      const url = searchTerm
-        ? `/api/family-tree?search=${encodeURIComponent(searchTerm)}`
-        : '/api/family-tree';
-      const res = await fetch(url);
+      const res = await fetch('/api/family-tree');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
-      // Flatten plot_id from the deceased_records join so it's directly accessible
       const mappedNodes = (data.nodes || []).map((n: TreeNode) => ({
         ...n,
         plot_id: n.deceased_records?.plot_id ?? n.plot_id ?? null,
       }));
       setNodes(mappedNodes);
       setRelationships(data.relationships || []);
+      setMaps(buildMaps(mappedNodes, data.relationships || []));
     } catch (err: any) {
       setError(err.message || 'Failed to load family tree');
     } finally {
@@ -548,395 +275,424 @@ function FamilyTreeInner() {
 
   useEffect(() => { loadTree(); }, [loadTree]);
 
-  // Auto-select and center on the node matching deceased_id from URL param
+  // Auto-focus on deceased_id param
   useEffect(() => {
-    if (!deceasedIdParam || loading || nodes.length === 0) return;
+    if (!deceasedIdParam || nodes.length === 0) return;
     const match = nodes.find(n => n.deceased_id === deceasedIdParam);
-    if (match) {
-      setSelectedNode(match);
-      setRootId(match.id);
+    if (match) setFocusedId(match.id);
+  }, [deceasedIdParam, nodes]);
+
+  // Default: focus on the first node if none selected
+  useEffect(() => {
+    if (!focusedId && nodes.length > 0 && !loading) {
+      setFocusedId(nodes[0].id);
     }
-  }, [deceasedIdParam, loading, nodes]);
+  }, [nodes, loading, focusedId]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSearch(searchInput);
-    loadTree(searchInput);
-  };
+  // Search
+  useEffect(() => {
+    if (!search.trim()) { setSearchResults([]); return; }
+    const q = search.toLowerCase();
+    setSearchResults(
+      nodes.filter(n =>
+        n.first_name.toLowerCase().includes(q) ||
+        n.last_name.toLowerCase().includes(q) ||
+        (n.maiden_name ?? '').toLowerCase().includes(q)
+      ).slice(0, 12)
+    );
+  }, [search, nodes]);
 
-  // Build layout and edges
-  const layout = buildLayout(nodes, relationships, rootId);
-  const edgePaths = buildEdgePaths(layout, relationships);
+  const focusedNode = focusedId ? maps?.nodeMap.get(focusedId) ?? null : null;
+  const parents = focusedId ? (maps?.parentsOf.get(focusedId) ?? []) : [];
+  const children = focusedId ? (maps?.childrenOf.get(focusedId) ?? []) : [];
+  const spouses = focusedId ? (maps?.spousesOf.get(focusedId) ?? []) : [];
+  const others = focusedId ? (maps?.othersOf.get(focusedId) ?? []) : [];
 
-  // Calculate SVG dimensions
-  const maxX = layout.reduce((m, n) => Math.max(m, n.x + NODE_W), 0) + H_GAP;
-  const maxY = layout.reduce((m, n) => Math.max(m, n.y + NODE_H), 0) + V_GAP;
-  const svgW = Math.max(maxX + 80, 800);
-  const svgH = Math.max(maxY + 80, 500);
+  // Group parents into paternal / maternal / unknown
+  const paternalParents = parents.filter(p =>
+    p.rel.includes('paternal') || p.rel === 'father'
+  );
+  const maternalParents = parents.filter(p =>
+    p.rel.includes('maternal') || p.rel === 'mother'
+  );
+  const unknownParents = parents.filter(p =>
+    !paternalParents.includes(p) && !maternalParents.includes(p)
+  );
 
-  // Get relationships for a node
-  const getNodeRelationships = (nodeId: string) =>
-    relationships.filter(r => r.person_a_id === nodeId || r.person_b_id === nodeId);
+  // Group children
+  const directChildren = children.filter(c =>
+    ['child', 'son', 'daughter', 'adoptive_child', 'step_child', 'godchild'].includes(c.rel)
+  );
+  const grandchildren = children.filter(c =>
+    c.rel.includes('grandchild') || c.rel.includes('great')
+  );
+  const otherDescendants = children.filter(c =>
+    !directChildren.includes(c) && !grandchildren.includes(c)
+  );
 
-  const getNodeById = (id: string) => nodes.find(n => n.id === id);
+  function navigateTo(id: string) {
+    setFocusedId(id);
+    setSearch('');
+    setSearchResults([]);
+    setShowSearch(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
-  // Pan handlers
-  const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    if ((e.target as Element).closest('g[data-node]')) return;
-    isPanning.current = true;
-    panStart.current = { x: e.clientX, y: e.clientY, vx: viewBox.x, vy: viewBox.y };
-  };
-  const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!isPanning.current) return;
-    const dx = ((panStart.current.x - e.clientX) / (svgRef.current?.clientWidth || 1)) * viewBox.w;
-    const dy = ((panStart.current.y - e.clientY) / (svgRef.current?.clientHeight || 1)) * viewBox.h;
-    setViewBox(v => ({ ...v, x: panStart.current.vx + dx, y: panStart.current.vy + dy }));
-  };
-  const onMouseUp = () => { isPanning.current = false; };
-  const onWheel = (e: React.WheelEvent<SVGSVGElement>) => {
-    e.preventDefault();
-    const factor = e.deltaY > 0 ? 1.1 : 0.9;
-    setViewBox(v => ({
-      x: v.x + (v.w * (1 - factor)) / 2,
-      y: v.y + (v.h * (1 - factor)) / 2,
-      w: v.w * factor,
-      h: v.h * factor,
-    }));
-  };
-
-  // Reset view
-  const resetView = () => setViewBox({ x: -40, y: -40, w: svgW + 80, h: svgH + 80 });
+  const plotId = focusedNode?.plot_id ?? (focusedNode?.deceased_records?.plot_id ?? null);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-3 flex-1">
-            <Link href="/" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
-              ← Home
-            </Link>
-            <span className="text-gray-300 dark:text-gray-600">|</span>
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white">🌳 Northwood Family Tree</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <form onSubmit={handleSearch} className="flex gap-2">
-              <input
-                type="text"
-                value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
-                placeholder="Search by name…"
-                className="border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent w-44"
-              />
-              <button
-                type="submit"
-                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors"
-              >
-                Search
-              </button>
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => { setSearchInput(''); setSearch(''); loadTree(); }}
-                  className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl transition-colors"
-                >
-                  Clear
-                </button>
-              )}
-            </form>
-            <Link
-              href="/family-tree/submit"
-              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors whitespace-nowrap"
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Link href="/" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">← Home</Link>
+          <div className="h-4 w-px bg-gray-300 dark:bg-gray-600" />
+          <h1 className="text-base font-bold text-emerald-800 dark:text-emerald-300 flex-1">
+            🌳 Community Family Tree
+          </h1>
+          <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">
+            {nodes.length} people · {relationships.length} connections
+          </span>
+          {/* Search toggle */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSearch(s => !s)}
+              className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-200 font-medium transition-colors"
             >
-              + Add Connection
+              🔍 Search
+            </button>
+            {showSearch && (
+              <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-xl z-30">
+                <div className="p-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Search by name…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  />
+                </div>
+                {searchResults.length > 0 && (
+                  <div className="border-t border-gray-100 dark:border-gray-700 max-h-64 overflow-y-auto">
+                    {searchResults.map(n => (
+                      <button
+                        key={n.id}
+                        onClick={() => navigateTo(n.id)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                      >
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{fullName(n)}</p>
+                        {lifespan(n) && <p className="text-xs text-gray-400 dark:text-gray-500">{lifespan(n)}</p>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {search && searchResults.length === 0 && (
+                  <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700">
+                    No results for "{search}"
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <Link
+            href="/family-tree/submit"
+            className="px-3 py-1.5 text-sm bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg transition-colors"
+          >
+            + Add Person
+          </Link>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        {loading && (
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center">
+              <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">Loading family tree…</p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-700 dark:text-red-300 text-sm">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && nodes.length === 0 && (
+          <div className="text-center py-24">
+            <div className="text-6xl mb-4">🌱</div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">The Community Family Tree is Empty</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">Be the first to add a family connection to Northwood Cemetery.</p>
+            <Link href="/family-tree/submit" className="inline-block px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl text-sm transition-colors">
+              Add the First Connection
             </Link>
           </div>
-        </div>
-      </header>
+        )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Tree canvas */}
-        <div className="flex-1 relative overflow-hidden">
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 z-10">
-              <div className="text-center">
-                <div className="text-4xl mb-3 animate-pulse">🌳</div>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">Loading family tree…</p>
+        {!loading && !error && focusedNode && (
+          <div className="flex flex-col lg:flex-row gap-6">
+
+            {/* ── Left: Pedigree view ── */}
+            <div className="flex-1 min-w-0 space-y-4">
+
+              {/* Paternal upline */}
+              {paternalParents.length > 0 && (
+                <CollapsibleSection title="Paternal Line" count={paternalParents.length} defaultOpen accentColor="blue">
+                  <div className="flex flex-wrap gap-3">
+                    {paternalParents.map(({ node, rel }) => (
+                      <PersonCard key={node.id} node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="sm" />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Maternal upline */}
+              {maternalParents.length > 0 && (
+                <CollapsibleSection title="Maternal Line" count={maternalParents.length} defaultOpen accentColor="purple">
+                  <div className="flex flex-wrap gap-3">
+                    {maternalParents.map(({ node, rel }) => (
+                      <PersonCard key={node.id} node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="sm" />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Unknown-side parents */}
+              {unknownParents.length > 0 && (
+                <CollapsibleSection title="Parents" count={unknownParents.length} defaultOpen accentColor="teal">
+                  <div className="flex flex-wrap gap-3">
+                    {unknownParents.map(({ node, rel }) => (
+                      <PersonCard key={node.id} node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="sm" />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Connector line */}
+              {(parents.length > 0 || children.length > 0 || spouses.length > 0) && (
+                <div className="flex justify-center">
+                  <div className="w-px h-6 bg-emerald-300 dark:bg-emerald-700" />
+                </div>
+              )}
+
+              {/* ── Focused person + spouses ── */}
+              <div className="flex flex-wrap items-start justify-center gap-4">
+                {/* Spouse(s) on left */}
+                {spouses.slice(0, Math.ceil(spouses.length / 2)).map(({ node, rel }) => (
+                  <div key={node.id} className="flex items-center gap-2">
+                    <PersonCard node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="md" />
+                    <div className="text-rose-400 text-lg font-bold">⚭</div>
+                  </div>
+                ))}
+
+                {/* Focused person */}
+                <PersonCard node={focusedNode} onClick={() => {}} isFocused size="lg" />
+
+                {/* Spouse(s) on right */}
+                {spouses.slice(Math.ceil(spouses.length / 2)).map(({ node, rel }) => (
+                  <div key={node.id} className="flex items-center gap-2">
+                    <div className="text-rose-400 text-lg font-bold">⚭</div>
+                    <PersonCard node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="md" />
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
 
-          {error && (
-            <div className="absolute inset-0 flex items-center justify-center z-10">
-              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl p-6 max-w-sm text-center">
-                <p className="text-red-700 dark:text-red-300 text-sm mb-3">{error}</p>
-                <button onClick={() => loadTree()} className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700">
-                  Retry
-                </button>
+              {/* Connector line */}
+              {(children.length > 0) && (
+                <div className="flex justify-center">
+                  <div className="w-px h-6 bg-emerald-300 dark:bg-emerald-700" />
+                </div>
+              )}
+
+              {/* Direct children */}
+              {directChildren.length > 0 && (
+                <CollapsibleSection title="Children" count={directChildren.length} defaultOpen accentColor="green">
+                  <div className="flex flex-wrap gap-3">
+                    {directChildren.map(({ node, rel }) => (
+                      <PersonCard key={node.id} node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="sm" />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Grandchildren */}
+              {grandchildren.length > 0 && (
+                <CollapsibleSection title="Grandchildren & Beyond" count={grandchildren.length} defaultOpen={false} accentColor="green">
+                  <div className="flex flex-wrap gap-3">
+                    {grandchildren.map(({ node, rel }) => (
+                      <PersonCard key={node.id} node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="sm" />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Other descendants */}
+              {otherDescendants.length > 0 && (
+                <CollapsibleSection title="Other Descendants" count={otherDescendants.length} defaultOpen={false} accentColor="green">
+                  <div className="flex flex-wrap gap-3">
+                    {otherDescendants.map(({ node, rel }) => (
+                      <PersonCard key={node.id} node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="sm" />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Other connections (siblings, cousins, etc.) */}
+              {others.length > 0 && (
+                <CollapsibleSection title="Other Connections" count={others.length} defaultOpen={false} accentColor="amber">
+                  <div className="flex flex-wrap gap-3">
+                    {others.map(({ node, rel }) => (
+                      <PersonCard key={node.id} node={node} onClick={() => navigateTo(node.id)} relLabel={rel} size="sm" />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* No connections at all */}
+              {parents.length === 0 && children.length === 0 && spouses.length === 0 && others.length === 0 && (
+                <div className="text-center py-6 text-sm text-gray-400 dark:text-gray-500">
+                  No family connections recorded yet for this person.
+                  <br />
+                  <Link href={`/family-tree/submit?anchor_id=${focusedNode.id}`} className="text-emerald-600 dark:text-emerald-400 hover:underline mt-1 inline-block">
+                    + Add a connection
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* ── Right: Detail sidebar ── */}
+            <aside className="w-full lg:w-72 flex-shrink-0 space-y-4">
+              {/* Person detail card */}
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 dark:text-white leading-tight">
+                      {focusedNode.first_name}
+                      {focusedNode.middle_name ? ` ${focusedNode.middle_name}` : ''}{' '}
+                      {focusedNode.last_name}
+                    </h2>
+                    {focusedNode.maiden_name && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500">née {focusedNode.maiden_name}</p>
+                    )}
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    focusedNode.is_living
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                      : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                  }`}>
+                    {focusedNode.is_living ? 'Living' : 'Deceased'}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  {lifespan(focusedNode) && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">Years</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{lifespan(focusedNode)}</span>
+                    </div>
+                  )}
+                  {focusedNode.gender && focusedNode.gender !== 'unknown' && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">Gender</span>
+                      <span className="font-medium text-gray-900 dark:text-white capitalize">{focusedNode.gender}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-gray-400">Connections</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {parents.length + children.length + spouses.length + others.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {plotId && (
+                    <Link
+                      href={`/plot/${plotId}`}
+                      className="block w-full text-center px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors"
+                    >
+                      ⚰ View Cemetery Record
+                    </Link>
+                  )}
+                  <Link
+                    href={`/family-tree/submit?anchor_id=${focusedNode.id}`}
+                    className="block w-full text-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    + Add Their Relative
+                  </Link>
+                </div>
               </div>
-            </div>
-          )}
 
-          {!loading && !error && nodes.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center max-w-md px-6">
-                <div className="text-6xl mb-4">🌱</div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                  {search ? `No results for "${search}"` : 'The Family Tree is Empty'}
-                </h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                  {search
-                    ? 'Try a different name or clear the search.'
-                    : 'Be the first to add a family connection to Northwood Cemetery.'}
-                </p>
-                <Link
-                  href="/family-tree/submit"
-                  className="inline-block px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl text-sm transition-colors"
-                >
-                  Add the First Connection
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {!loading && !error && nodes.length > 0 && (
-            <>
-              {/* Controls */}
-              <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
-                <button
-                  onClick={() => setViewBox(v => ({ ...v, w: v.w * 0.85, h: v.h * 0.85 }))}
-                  className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 text-lg font-bold shadow-sm hover:bg-gray-50 flex items-center justify-center"
-                  title="Zoom in"
-                >+</button>
-                <button
-                  onClick={() => setViewBox(v => ({ ...v, w: v.w * 1.15, h: v.h * 1.15 }))}
-                  className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 text-lg font-bold shadow-sm hover:bg-gray-50 flex items-center justify-center"
-                  title="Zoom out"
-                >−</button>
-                <button
-                  onClick={resetView}
-                  className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 text-xs shadow-sm hover:bg-gray-50 flex items-center justify-center"
-                  title="Reset view"
-                >⊡</button>
+              {/* Browse all people */}
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Browse All People</h3>
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-700">
+                  {nodes.map(n => (
+                    <button
+                      key={n.id}
+                      onClick={() => navigateTo(n.id)}
+                      className={`w-full text-left px-4 py-2.5 transition-colors ${
+                        n.id === focusedId
+                          ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-white'
+                      }`}
+                    >
+                      <p className="text-sm font-medium truncate">{n.first_name} {n.last_name}</p>
+                      {lifespan(n) && <p className="text-xs text-gray-400 dark:text-gray-500">{lifespan(n)}</p>}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Legend */}
-              <div className="absolute bottom-3 left-3 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl p-3 shadow-sm text-xs space-y-1.5">
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm text-xs space-y-2">
                 <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Legend</p>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded bg-green-50 border border-green-300 flex-shrink-0" />
-                  <span className="text-gray-600 dark:text-gray-400">Deceased (in cemetery)</span>
+                  <div className="w-3 h-3 rounded-full bg-blue-400 flex-shrink-0" />
+                  <span className="text-gray-500 dark:text-gray-400">Male</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded bg-blue-50 border border-blue-300 flex-shrink-0" />
-                  <span className="text-gray-600 dark:text-gray-400">Living family member</span>
+                  <div className="w-3 h-3 rounded-full bg-pink-400 flex-shrink-0" />
+                  <span className="text-gray-500 dark:text-gray-400">Female</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-4 rounded bg-blue-500 flex-shrink-0" />
-                  <span className="text-gray-600 dark:text-gray-400">Male</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-4 rounded bg-pink-500 flex-shrink-0" />
-                  <span className="text-gray-600 dark:text-gray-400">Female</span>
+                  <div className="w-3 h-3 rounded-full bg-gray-400 flex-shrink-0" />
+                  <span className="text-gray-500 dark:text-gray-400">Gender unknown</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500">⚰</span>
-                  <span className="text-gray-600 dark:text-gray-400">Has cemetery record</span>
+                  <span className="text-gray-500 dark:text-gray-400">Has cemetery record</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-rose-400 font-bold">⚭</span>
+                  <span className="text-gray-500 dark:text-gray-400">Spouse / Partner</span>
                 </div>
               </div>
-
-              <svg
-                ref={svgRef}
-                viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
-                width="100%"
-                height="100%"
-                style={{ cursor: isPanning.current ? 'grabbing' : 'grab', userSelect: 'none' }}
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onMouseUp={onMouseUp}
-                onMouseLeave={onMouseUp}
-                onWheel={onWheel}
-              >
-                {/* Relationship edges — rendered below nodes */}
-                {edgePaths.map(edge => (
-                  <g key={edge.key}>
-                    <path
-                      d={edge.pathD}
-                      fill="none"
-                      stroke={edge.isSpouse ? '#f472b6' : '#6ee7b7'}
-                      strokeWidth={edge.isSpouse ? 2 : 1.5}
-                      strokeDasharray={edge.isSpouse ? '6,4' : undefined}
-                      opacity={0.75}
-                    />
-                    {edge.label && (
-                      <text
-                        x={edge.labelX}
-                        y={edge.labelY}
-                        textAnchor="middle"
-                        fontSize={9}
-                        fill="#9ca3af"
-                        fontFamily="system-ui, sans-serif"
-                      >
-                        {edge.label}
-                      </text>
-                    )}
-                  </g>
-                ))}
-
-                {/* Nodes */}
-                {layout.map(node => (
-                  <g key={node.id} data-node="true">
-                    <NodeCard
-                      node={node}
-                      selected={selectedNode?.id === node.id}
-                      onClick={() => setSelectedNode(prev => prev?.id === node.id ? null : node)}
-                    />
-                  </g>
-                ))}
-              </svg>
-            </>
-          )}
-        </div>
-
-        {/* Side panel — selected node details */}
-        {selectedNode && (
-          <aside className="w-72 flex-shrink-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
-            <div className="p-5">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2 className="text-base font-bold text-gray-900 dark:text-white">
-                    {selectedNode.first_name}{' '}
-                    {selectedNode.middle_name ? `${selectedNode.middle_name} ` : ''}
-                    {selectedNode.last_name}
-                  </h2>
-                  {selectedNode.maiden_name && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">née {selectedNode.maiden_name}</p>
-                  )}
-                </div>
-                <button
-                  onClick={() => setSelectedNode(null)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg leading-none"
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Status badge */}
-              <div className="mb-4">
-                <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                  selectedNode.is_living
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                    : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                }`}>
-                  {selectedNode.is_living ? 'Living' : 'Deceased'}
-                </span>
-                {selectedNode.deceased_id && (
-                  <span className="ml-2 inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                    In Cemetery
-                  </span>
-                )}
-              </div>
-
-              {/* Details */}
-              <div className="space-y-2 text-sm mb-5">
-                {(selectedNode.birth_year || selectedNode.death_year) && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Years</span>
-                    <span className="text-gray-900 dark:text-white font-medium">
-                      {selectedNode.birth_year ?? '?'} – {selectedNode.death_year ?? (selectedNode.is_living ? 'Present' : '?')}
-                    </span>
-                  </div>
-                )}
-                {selectedNode.gender && selectedNode.gender !== 'unknown' && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Gender</span>
-                    <span className="text-gray-900 dark:text-white font-medium capitalize">{selectedNode.gender}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Relationships */}
-              <div>
-                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                  Connections
-                </h3>
-                {getNodeRelationships(selectedNode.id).length === 0 ? (
-                  <p className="text-xs text-gray-400 dark:text-gray-500">No connections yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {getNodeRelationships(selectedNode.id).map(rel => {
-                      const isA = rel.person_a_id === selectedNode.id;
-                      const otherId = isA ? rel.person_b_id : rel.person_a_id;
-                      const other = getNodeById(otherId);
-                      const label = isA ? rel.relationship_type : (rel.inverse_type || rel.relationship_type);
-                      return (
-                        <button
-                          key={rel.id}
-                          onClick={() => {
-                            const otherNode = nodes.find(n => n.id === otherId);
-                            if (otherNode) setSelectedNode(otherNode);
-                          }}
-                          className="w-full text-left px-3 py-2 bg-gray-50 dark:bg-gray-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
-                        >
-                          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                            {label.replace(/_/g, ' ')} of
-                          </p>
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {other ? `${other.first_name} ${other.last_name}` : 'Unknown'}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="mt-5 space-y-2">
-                {(selectedNode.plot_id || selectedNode.deceased_id) && (
-                  <Link
-                    href={`/plot/${selectedNode.plot_id || selectedNode.deceased_id}`}
-                    className="block w-full text-center px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors"
-                  >
-                    View Cemetery Record
-                  </Link>
-                )}
-                <Link
-                  href={`/family-tree/submit?anchor_id=${selectedNode.id}`}
-                  className="block w-full text-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl transition-colors"
-                >
-                  + Add Their Relative
-                </Link>
-                <button
-                  onClick={() => setRootId(prev => prev === selectedNode.id ? undefined : selectedNode.id)}
-                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl transition-colors"
-                >
-                  {rootId === selectedNode.id ? 'Reset Layout' : 'Center Tree on This Person'}
-                </button>
-              </div>
-            </div>
-          </aside>
+            </aside>
+          </div>
         )}
       </div>
-
-      {/* Stats bar */}
-      {!loading && nodes.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-6 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
-          <span><strong className="text-gray-900 dark:text-white">{nodes.length}</strong> people</span>
-          <span><strong className="text-gray-900 dark:text-white">{relationships.length}</strong> connections</span>
-          <span><strong className="text-gray-900 dark:text-white">{nodes.filter(n => !n.is_living).length}</strong> deceased</span>
-          <span><strong className="text-gray-900 dark:text-white">{nodes.filter(n => n.is_living).length}</strong> living</span>
-          <span className="ml-auto">Scroll to zoom · Drag to pan · Click a person for details</span>
-        </div>
-      )}
     </div>
   );
 }
 
+// ─── Suspense wrapper (required for useSearchParams) ─────────────────────────
 export default function FamilyTreePage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-gray-500">Loading family tree…</div>}>
-      <FamilyTreeInner />
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+        </div>
+      </div>
+    }>
+      <FamilyTreePageInner />
     </Suspense>
   );
 }
