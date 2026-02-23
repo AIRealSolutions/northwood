@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getServiceSupabase();
 
-    // Fetch all approved nodes
+    // Fetch all approved nodes, joining deceased_records to get plot_id
     let nodeQuery = supabase
       .from('family_tree_nodes')
-      .select('*')
+      .select('*, deceased_records(id, plot_id)')
       .eq('status', 'approved')
       .order('last_name')
       .order('first_name');

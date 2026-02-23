@@ -9,6 +9,7 @@ import { useSearchParams } from 'next/navigation';
 interface TreeNode {
   id: string;
   deceased_id?: string | null;
+  plot_id?: string | null;  // resolved from deceased_records join
   first_name: string;
   middle_name?: string | null;
   last_name: string;
@@ -18,6 +19,7 @@ interface TreeNode {
   is_living: boolean;
   gender?: string | null;
   status: string;
+  deceased_records?: { id: string; plot_id: string } | null; // joined
 }
 
 interface TreeRelationship {
@@ -530,7 +532,12 @@ function FamilyTreeInner() {
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
-      setNodes(data.nodes || []);
+      // Flatten plot_id from the deceased_records join so it's directly accessible
+      const mappedNodes = (data.nodes || []).map((n: TreeNode) => ({
+        ...n,
+        plot_id: n.deceased_records?.plot_id ?? n.plot_id ?? null,
+      }));
+      setNodes(mappedNodes);
       setRelationships(data.relationships || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load family tree');
@@ -886,9 +893,9 @@ function FamilyTreeInner() {
 
               {/* Actions */}
               <div className="mt-5 space-y-2">
-                {selectedNode.deceased_id && (
+                {(selectedNode.plot_id || selectedNode.deceased_id) && (
                   <Link
-                    href={`/plot/${selectedNode.deceased_id}`}
+                    href={`/plot/${selectedNode.plot_id || selectedNode.deceased_id}`}
                     className="block w-full text-center px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors"
                   >
                     View Cemetery Record
