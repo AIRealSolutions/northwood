@@ -233,11 +233,13 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       plotsByRow[parseInt(row)].sort((a, b) => (a.plot_position || 0) - (b.plot_position || 0));
     });
 
-    const splitRow = ('splitRow' in section && section.splitRow) ? section.splitRow as number : 37;
+    const splitRow = (section as {splitRow?: number}).splitRow ?? 37;
+    const minRow = (section as {minRow?: number}).minRow;
+    const maxRow = (section as {maxRow?: number}).maxRow;
 
     let allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
-    if (section.minRow) allRows = allRows.filter(r => r >= section.minRow!);
-    if (section.maxRow) allRows = allRows.filter(r => r <= section.maxRow!);
+    if (minRow) allRows = allRows.filter(r => r >= minRow);
+    if (maxRow) allRows = allRows.filter(r => r <= maxRow);
 
     const westStripRows = allRows.filter(r => r <= splitRow);
     const eastStripRows = allRows.filter(r => r > splitRow);
@@ -255,11 +257,6 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <p className="text-white/80 text-xs">
                 {section.westRoad} ↔ {section.eastRoad}
               </p>
-              {'note' in section && section.note && (
-                <p className="text-yellow-200 text-[9px] font-semibold mt-0.5">
-                  {section.note as string}
-                </p>
-              )}
               <p className="text-white/60 text-[9px]">{getPlotWidthLabel(section.id)}</p>
             </div>
             <div className="text-right bg-white/20 rounded-lg px-3 py-1.5">
