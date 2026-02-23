@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { plotsAPI, PlotWithDetails } from '@/lib/supabase';
 import { G2_ROW_PATTERN, H2_ROW_PATTERN } from '@/lib/sectionPatterns';
+// G and H use the same patterns as G2 and H2 (same plat layout)
+const G_ROW_PATTERN = G2_ROW_PATTERN;
+const H_ROW_PATTERN = H2_ROW_PATTERN;
 
 interface CemeteryMapUnifiedProps {
   highlightPlot?: string;
@@ -16,8 +19,8 @@ const SECTIONS = [
   { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm', color: 'from-sky-500 to-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', maxRow: 74, splitRow: 37 },
   { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig', color: 'from-blue-500 to-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', maxRow: 74, splitRow: 37 },
   { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia', color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74, splitRow: 37 },
-  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74, splitRow: 37 },
-  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74, splitRow: 37 },
+  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 386, splitRow: 193, rowPattern: G_ROW_PATTERN },
+  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 582, splitRow: 291, rowPattern: H_ROW_PATTERN },
   { id: 'I', name: 'Section I', westRoad: 'Hydrangia', eastRoad: 'Residential', color: 'from-pink-500 to-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200', minRow: 75, splitRow: 37 },
   { id: 'G2', name: 'Section G2', westRoad: 'Hydrangia', eastRoad: 'Iris', color: 'from-violet-600 to-violet-800', bgColor: 'bg-violet-100', borderColor: 'border-violet-300', maxRow: 386, splitRow: 193, plotWidth: '5ft', note: "Second G Road \u2013 5' wide plots", patternOnly: true, rowPattern: G2_ROW_PATTERN },
   { id: 'H2', name: 'Section H2', westRoad: 'Iris', eastRoad: 'Jasmine', color: 'from-purple-600 to-purple-800', bgColor: 'bg-purple-100', borderColor: 'border-purple-300', maxRow: 582, splitRow: 291, plotWidth: '9ft', note: "Second H Road \u2013 9' wide plots", patternOnly: true, rowPattern: H2_ROW_PATTERN },
@@ -175,6 +178,60 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     }
   };
 
+  // Renders a row using pattern positions but overlays real DB records where they exist.
+  // DB-backed plots are clickable links; unrecorded positions show as empty green slots.
+  const renderHybridRow = (
+    row: number,
+    positionCount: number,
+    rowPlots: PlotWithDetails[],
+    sectionColor: string
+  ) => {
+    const positions = Array.from({ length: positionCount }, (_, i) => i + 1);
+    return (
+      <div className="mb-1" key={row}>
+        <div className="text-[8px] text-gray-500 mb-0.5">Row {row}</div>
+        <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
+          <div className="flex gap-0.5">
+            {positions.map((pos) => {
+              const plot = rowPlots.find(p => p.plot_position === pos);
+              if (plot) {
+                const deceasedName = getDeceasedName(plot);
+                return (
+                  <div
+                    key={pos}
+                    ref={(el) => { plotRefs.current[plot.plot_number] = el; }}
+                  >
+                    <Link
+                      href={`/plot/${plot.id}`}
+                      className={`
+                        w-7 h-5 rounded-sm flex items-center justify-center
+                        text-white shadow-sm border
+                        transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10
+                        ${getStatusColor(plot.status)}
+                      `}
+                      title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+                    >
+                      <span className="text-[7px] font-bold">{pos}</span>
+                    </Link>
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={pos}
+                  className="w-7 h-5 rounded-sm bg-emerald-200 border border-emerald-300 flex items-center justify-center"
+                  title={`Row ${row}, Position ${pos} \u2013 Available`}
+                >
+                  <span className="text-[7px] text-emerald-700">{pos}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Renders a single row using only the pattern definition (no DB data)
   // Shows all positions as available (future/planned plots)
   const renderPatternRow = (
@@ -259,7 +316,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
   const renderSection = (section: typeof SECTIONS[0], index: number) => {
     const isPatternOnly = 'patternOnly' in section && section.patternOnly;
-    const rowPattern = isPatternOnly && 'rowPattern' in section ? section.rowPattern as Record<number, number> : null;
+    const hasRowPattern = 'rowPattern' in section && section.rowPattern;
+    const rowPattern = hasRowPattern ? section.rowPattern as Record<number, number> : null;
+    // isHybrid: has a rowPattern but is NOT patternOnly (i.e. real DB records exist for some rows)
+    const isHybrid = hasRowPattern && !isPatternOnly;
 
     const plots = allPlots[section.id] || [];
     const plotsByRow: Record<number, PlotWithDetails[]> = {};
@@ -276,9 +336,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
     const splitRow = ('splitRow' in section && section.splitRow) ? section.splitRow as number : 37;
 
-    // For pattern-only sections, derive rows from the pattern definition
+    // Derive rows from pattern if available (pattern-only or hybrid), else from DB
     let allRows: number[];
-    if (isPatternOnly && rowPattern) {
+    if (rowPattern) {
       allRows = Object.keys(rowPattern).map(Number).sort((a, b) => a - b);
     } else {
       allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
@@ -288,7 +348,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
 
     const westStripRows = allRows.filter(r => r <= splitRow);
     const eastStripRows = allRows.filter(r => r > splitRow);
-    const totalPatternPlots = isPatternOnly && rowPattern ? Object.values(rowPattern).reduce((a, b) => a + b, 0) : plots.length;
+    // Total plot count: use pattern total for pattern/hybrid sections, DB count otherwise
+    const totalPatternPlots = rowPattern
+      ? Object.values(rowPattern).reduce((a, b) => a + b, 0)
+      : plots.length;
 
     return (
       <div 
@@ -312,7 +375,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
             <div className="text-right bg-white/20 rounded-lg px-3 py-1.5">
               <div className="text-lg font-bold text-white">{totalPatternPlots}</div>
-              <div className="text-white/80 text-[10px]">{isPatternOnly ? 'Planned' : 'Plots'}</div>
+              <div className="text-white/80 text-[10px]">
+                {isPatternOnly ? 'Planned' : isHybrid ? `${plots.length} in DB` : 'Plots'}
+              </div>
             </div>
           </div>
         </div>
@@ -339,7 +404,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
                   {[...westStripRows].reverse().map((row) =>
                     isPatternOnly && rowPattern
                       ? renderPatternRow(row, rowPattern[row] || 1, 'west', section.borderColor)
-                      : renderRowMatrix(row, 'west', plotsByRow[row] || [], section.borderColor)
+                      : isHybrid && rowPattern
+                        ? renderHybridRow(row, rowPattern[row] || 1, plotsByRow[row] || [], section.borderColor)
+                        : renderRowMatrix(row, 'west', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
@@ -357,7 +424,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
                   {eastStripRows.map((row) =>
                     isPatternOnly && rowPattern
                       ? renderPatternRow(row, rowPattern[row] || 1, 'east', section.borderColor)
-                      : renderRowMatrix(row, 'east', plotsByRow[row] || [], section.borderColor)
+                      : isHybrid && rowPattern
+                        ? renderHybridRow(row, rowPattern[row] || 1, plotsByRow[row] || [], section.borderColor)
+                        : renderRowMatrix(row, 'east', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
