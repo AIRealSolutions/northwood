@@ -9,15 +9,17 @@ interface CemeteryMapUnifiedProps {
 }
 
 const SECTIONS = [
-  { id: 'A', name: 'Section A', westRoad: 'Azalea', eastRoad: 'Beech', color: 'from-emerald-500 to-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', maxRow: 74 },
-  { id: 'B', name: 'Section B', westRoad: 'Beech', eastRoad: 'Chinquapin', color: 'from-teal-500 to-teal-700', bgColor: 'bg-teal-50', borderColor: 'border-teal-200', maxRow: 74 },
-  { id: 'C', name: 'Section C', westRoad: 'Chinquapin', eastRoad: 'Dogwood', color: 'from-cyan-500 to-cyan-700', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200', maxRow: 74 },
-  { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm', color: 'from-sky-500 to-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', maxRow: 74 },
-  { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig', color: 'from-blue-500 to-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', maxRow: 74 },
-  { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia', color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74 },
-  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74 },
-  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74 },
-  { id: 'I', name: 'Section I', westRoad: 'Hydrangia', eastRoad: 'Residential', color: 'from-pink-500 to-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200', minRow: 75 },
+  { id: 'A', name: 'Section A', westRoad: 'Azalea', eastRoad: 'Beech', color: 'from-emerald-500 to-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', maxRow: 74, splitRow: 37 },
+  { id: 'B', name: 'Section B', westRoad: 'Beech', eastRoad: 'Chinquapin', color: 'from-teal-500 to-teal-700', bgColor: 'bg-teal-50', borderColor: 'border-teal-200', maxRow: 74, splitRow: 37 },
+  { id: 'C', name: 'Section C', westRoad: 'Chinquapin', eastRoad: 'Dogwood', color: 'from-cyan-500 to-cyan-700', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200', maxRow: 74, splitRow: 37 },
+  { id: 'D', name: 'Section D', westRoad: 'Dogwood', eastRoad: 'Elm', color: 'from-sky-500 to-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', maxRow: 74, splitRow: 37 },
+  { id: 'E', name: 'Section E', westRoad: 'Elm', eastRoad: 'Fig', color: 'from-blue-500 to-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', maxRow: 74, splitRow: 37 },
+  { id: 'F', name: 'Section F', westRoad: 'Fig', eastRoad: 'Gardenia', color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74, splitRow: 37 },
+  { id: 'G', name: 'Section G', westRoad: 'Gardenia', eastRoad: 'Heather', color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 74, splitRow: 37 },
+  { id: 'H', name: 'Section H', westRoad: 'Heather', eastRoad: 'Hydrangia', color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 74, splitRow: 37 },
+  { id: 'I', name: 'Section I', westRoad: 'Hydrangia', eastRoad: 'Residential', color: 'from-pink-500 to-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200', minRow: 75, splitRow: 37 },
+  { id: 'G2', name: 'Section G2', westRoad: 'Hydrangia', eastRoad: 'Iris', color: 'from-violet-600 to-violet-800', bgColor: 'bg-violet-100', borderColor: 'border-violet-300', maxRow: 386, splitRow: 193, plotWidth: '5ft', note: "Second G Road \u2013 5' wide plots (386 rows, 787 plots)" },
+  { id: 'H2', name: 'Section H2', westRoad: 'Iris', eastRoad: 'Jasmine', color: 'from-purple-600 to-purple-800', bgColor: 'bg-purple-100', borderColor: 'border-purple-300', maxRow: 582, splitRow: 291, plotWidth: '9ft', note: "Second H Road \u2013 9' wide plots (582 rows, 1027 plots)" },
 ];
 
 export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnifiedProps) {
@@ -79,6 +81,13 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper to get plot width label for a section
+  const getPlotWidthLabel = (sectionId: string): string => {
+    if (sectionId === 'H' || sectionId === 'H2') return "9' plots";
+    if (sectionId === 'G' || sectionId === 'G2') return "5' plots";
+    return "4' plots";
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -237,8 +246,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       allRows = allRows.filter(r => r <= section.maxRow!);
     }
     
-    const westStripRows = allRows.filter(r => r <= 37);
-    const eastStripRows = allRows.filter(r => r > 37);
+    const splitRow = ('splitRow' in section && section.splitRow) ? section.splitRow as number : 37;
+    const westStripRows = allRows.filter(r => r <= splitRow);
+    const eastStripRows = allRows.filter(r => r > splitRow);
 
     return (
       <div 
@@ -253,6 +263,12 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <p className="text-white/80 text-xs">
                 {section.westRoad} ↔ {section.eastRoad}
               </p>
+              {'note' in section && section.note && (
+                <p className="text-yellow-200 text-[9px] font-semibold mt-0.5">
+                  {section.note as string}
+                </p>
+              )}
+              <p className="text-white/60 text-[9px]">{getPlotWidthLabel(section.id)}</p>
             </div>
             <div className="text-right bg-white/20 rounded-lg px-3 py-1.5">
               <div className="text-lg font-bold text-white">{plots.length}</div>
@@ -275,7 +291,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
               <div className="text-center mb-2">
                 <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
-                  Rows 1-37 ↑
+                  Rows 1-{splitRow} ↑
                 </span>
               </div>
               <div className="flex justify-start">
@@ -291,7 +307,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
               <div className="text-center mb-2">
                 <span className="text-[10px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
-                  Rows 38+ ↓
+                  Rows {splitRow + 1}+ ↓
                 </span>
               </div>
               <div className="flex justify-end">
