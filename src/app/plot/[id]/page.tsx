@@ -75,14 +75,36 @@ function FamilyBranch({
         <div className="px-4 py-3 space-y-2">
           {connections.map(c => {
             const def = c.member_relationship ? getRelationship(c.member_relationship) : null;
-            const relLabel = def ? def.inverse : (c.occupant_relationship || c.relationship || 'Family');
+            // What the occupant is to this person (e.g. "Grandparent")
+            const occupantRel = def ? def.inverseLabel : (c.occupant_relationship || c.relationship || 'Family');
+            // What this person is to the occupant (e.g. "Grandchild")
+            const memberRel = def ? def.label.replace(' (specify in notes)', '') : (c.member_relationship || c.relationship || 'Family');
+            const connectorName = [c.user_first_name, c.user_last_name].filter(Boolean).join(' ') || null;
             return (
-              <div key={c.id} className="flex items-center gap-2 text-xs">
-                <span className="opacity-60">👤</span>
-                <span className="font-medium">{relLabel}</span>
-                {c.deceased_records && (
-                  <span className="opacity-60">of {c.deceased_records.first_name} {c.deceased_records.last_name}</span>
-                )}
+              <div key={c.id} className="flex items-start gap-3 py-2 border-b border-current/10 last:border-0">
+                <div className="mt-0.5 w-8 h-8 rounded-full bg-white/50 dark:bg-black/20 flex items-center justify-center flex-shrink-0 text-sm font-bold">
+                  {connectorName ? connectorName[0].toUpperCase() : '👤'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  {connectorName ? (
+                    <p className="text-sm font-semibold leading-tight">{connectorName}</p>
+                  ) : (
+                    <p className="text-sm font-semibold leading-tight opacity-60">Community Member</p>
+                  )}
+                  <p className="text-xs mt-0.5 opacity-80">
+                    <span className="font-medium">{memberRel}</span>
+                    {c.deceased_records && (
+                      <span className="opacity-70"> of {c.deceased_records.first_name} {c.deceased_records.last_name}</span>
+                    )}
+                  </p>
+                  {occupantRel && occupantRel !== memberRel && (
+                    <p className="text-xs opacity-60 mt-0.5">
+                      {c.deceased_records
+                        ? `${c.deceased_records.first_name} is their ${occupantRel}`
+                        : `Occupant is their ${occupantRel}`}
+                    </p>
+                  )}
+                </div>
               </div>
             );
           })}

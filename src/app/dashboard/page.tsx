@@ -6,12 +6,16 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import RelationshipDiscoveryFeed from '@/components/RelationshipDiscoveryFeed';
+import RecentConnectionsFeed from '@/components/RecentConnectionsFeed';
 
 interface Connection {
   id: string;
   relationship: string;
+  member_relationship?: string | null;
+  occupant_relationship?: string | null;
   status: string;
-  plots?: { plot_number: string; section: string } | null;
+  plots?: { id: string; plot_number: string; section: string } | null;
   deceased_records?: { first_name: string; last_name: string } | null;
 }
 
@@ -29,7 +33,7 @@ export default function DashboardPage() {
     if (status === 'authenticated') {
       loadDashboardData();
     }
-  }, [status, session]);
+  }, [status, session]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDashboardData = async () => {
     try {
@@ -62,12 +66,12 @@ export default function DashboardPage() {
   const isCommittee = role === 'cemetery_committee';
   const isAdminOrCommittee = isAdmin || isCommittee;
 
-  const pendingConnections = connections.filter(c => c.status === 'pending');
+  const pendingConnections  = connections.filter(c => c.status === 'pending');
   const approvedConnections = connections.filter(c => c.status === 'approved');
 
   const statusBadge = (s: string) => {
     if (s === 'approved') return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-    if (s === 'rejected') return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+    if (s === 'rejected')  return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
     return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
   };
 
@@ -82,6 +86,8 @@ export default function DashboardPage() {
     : isCommittee
     ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
     : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
+
+  const hasApprovedConnections = approvedConnections.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -112,10 +118,10 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-2xl font-bold mb-1">My Dashboard</h1>
               <p className="text-emerald-100 text-sm">
-                Manage your family connections, submissions, and profile.
+                Manage your family connections, discover relatives, and explore the community tree.
               </p>
             </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-semibold bg-white/20 text-white border border-white/30`}>
+            <span className="px-3 py-1 rounded-full text-sm font-semibold bg-white/20 text-white border border-white/30">
               {roleLabel}
             </span>
           </div>
@@ -131,6 +137,12 @@ export default function DashboardPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-medium transition-colors"
             >
               📋 Browse Records
+            </Link>
+            <Link
+              href="/family-tree"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-medium transition-colors"
+            >
+              🌳 Family Tree
             </Link>
             <Link
               href="/cemetery-committee"
@@ -213,19 +225,19 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ── Main 3-column grid ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Family Connections */}
+
+          {/* Left column: My Connections + Quick Actions */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Connections List */}
+
+            {/* ── My Family Connections ─────────────────────────────────────── */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   🌳 My Family Connections
                 </h2>
-                <Link
-                  href="/my-connections"
-                  className="text-sm text-emerald-600 hover:underline"
-                >
+                <Link href="/my-connections" className="text-sm text-emerald-600 hover:underline">
                   View All →
                 </Link>
               </div>
@@ -260,14 +272,29 @@ export default function DashboardPage() {
                               : conn.plots?.plot_number || 'Plot connection'}
                           </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {conn.relationship}
+                            {conn.member_relationship
+                              ? conn.member_relationship.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                              : conn.relationship}
+                            {conn.occupant_relationship && (
+                              <span className="text-gray-400"> · Occupant is my {conn.occupant_relationship}</span>
+                            )}
                             {conn.plots && ` · Plot ${conn.plots.plot_number}`}
                           </p>
                         </div>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge(conn.status)}`}>
-                        {conn.status.charAt(0).toUpperCase() + conn.status.slice(1)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {conn.plots?.id && (
+                          <Link
+                            href={`/plot/${conn.plots.id}`}
+                            className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
+                          >
+                            View →
+                          </Link>
+                        )}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge(conn.status)}`}>
+                          {conn.status.charAt(0).toUpperCase() + conn.status.slice(1)}
+                        </span>
+                      </div>
                     </div>
                   ))}
                   {connections.length > 5 && (
@@ -279,7 +306,35 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Quick Actions */}
+            {/* ── Relationship Discovery Feed ───────────────────────────────── */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  🔍 People You May Be Related To
+                </h2>
+              </div>
+              {hasApprovedConnections ? (
+                <RelationshipDiscoveryFeed compact previewCount={5} />
+              ) : (
+                <div className="text-center py-6 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                  <p className="text-3xl mb-2">🔗</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                    Connect to cemetery plots to discover people you may be related to.
+                  </p>
+                  <Link
+                    href="/records"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors"
+                  >
+                    Find Your Family
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* ── Recent Community Connections Feed ─────────────────────────── */}
+            <RecentConnectionsFeed previewCount={5} />
+
+            {/* ── Quick Actions ─────────────────────────────────────────────── */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -294,6 +349,16 @@ export default function DashboardPage() {
                   </div>
                 </Link>
                 <Link
+                  href="/family-tree"
+                  className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                >
+                  <span className="text-2xl">🌳</span>
+                  <div>
+                    <p className="font-semibold text-emerald-900 dark:text-emerald-100 text-sm">Community Tree</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-300">Explore all connections</p>
+                  </div>
+                </Link>
+                <Link
                   href="/cemetery-committee"
                   className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
                 >
@@ -304,20 +369,10 @@ export default function DashboardPage() {
                   </div>
                 </Link>
                 <Link
-                  href="/cemetery-committee?section=agenda"
-                  className="flex items-center gap-3 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
-                >
-                  <span className="text-2xl">📋</span>
-                  <div>
-                    <p className="font-semibold text-purple-900 dark:text-purple-100 text-sm">Submit Agenda Item</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-300">Add to committee meeting</p>
-                  </div>
-                </Link>
-                <Link
                   href="/my-connections"
                   className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
                 >
-                  <span className="text-2xl">🌳</span>
+                  <span className="text-2xl">🔗</span>
                   <div>
                     <p className="font-semibold text-green-900 dark:text-green-100 text-sm">My Connections</p>
                     <p className="text-xs text-green-600 dark:text-green-300">Manage family links</p>
@@ -352,10 +407,35 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            {/* Cemetery Info */}
+            {/* How It Works */}
             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-5">
-              <h3 className="font-semibold text-emerald-900 dark:text-emerald-100 mb-2">About Northwood</h3>
-              <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-3">
+              <h3 className="font-semibold text-emerald-900 dark:text-emerald-100 mb-3 flex items-center gap-2">
+                <span>💡</span> How Relationship Discovery Works
+              </h3>
+              <ol className="space-y-2 text-sm text-emerald-800 dark:text-emerald-200">
+                <li className="flex gap-2">
+                  <span className="font-bold flex-shrink-0">1.</span>
+                  <span>Connect to a plot where your ancestor is buried</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-bold flex-shrink-0">2.</span>
+                  <span>We find others connected to the same plots</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-bold flex-shrink-0">3.</span>
+                  <span>We infer how you may be related based on both relationships</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-bold flex-shrink-0">4.</span>
+                  <span>Discover cousins, siblings, and relatives you didn&apos;t know about</span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Cemetery Info */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">About Northwood</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                 Northwood Cemetery in Southport, NC — preserving family histories since the 19th century.
               </p>
               <div className="space-y-2">
@@ -364,6 +444,9 @@ export default function DashboardPage() {
                 </Link>
                 <Link href="/cemetery-map" className="block text-sm text-emerald-700 dark:text-emerald-300 hover:underline">
                   🗺️ Interactive Map →
+                </Link>
+                <Link href="/family-tree" className="block text-sm text-emerald-700 dark:text-emerald-300 hover:underline">
+                  🌳 Community Family Tree →
                 </Link>
               </div>
             </div>
