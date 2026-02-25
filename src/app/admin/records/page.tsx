@@ -51,7 +51,7 @@ const BLANK_DECEASED: Omit<DeceasedRecord, 'id'> = {
   maiden_name: '',
   birth_date: '',
   death_date: '',
-  buria  burial_date: '',
+  burial_date: '',
   age_at_death: undefined,
   gender: '',
   veteran_status: false,
