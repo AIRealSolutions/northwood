@@ -138,12 +138,6 @@ export default function AdminDashboard() {
               icon="📋"
             />
             <ActionButton
-              href="/cemetery-map"
-              title="Cemetery Map"
-              description="View interactive cemetery map"
-              icon="🗺️"
-            />
-            <ActionButton
               href="/admin/moderation"
               title="Moderation Queue"
               description="Review pending content"
