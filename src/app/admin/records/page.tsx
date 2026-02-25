@@ -51,7 +51,7 @@ const BLANK_DECEASED: Omit<DeceasedRecord, 'id'> = {
   maiden_name: '',
   birth_date: '',
   death_date: '',
-  burial_date: '',
+  buria  burial_date: '',
   age_at_death: undefined,
   gender: '',
   veteran_status: false,
@@ -705,8 +705,8 @@ export default function AdminRecordsPage() {
                       type="number"
                       min="0"
                       max="130"
-                      value={formData.age_at_death}
-                      onChange={(e) => setFormData((f) => ({ ...f, age_at_death: e.target.value }))}
+                      value={formData.age_at_death ?? ''}
+                      onChange={(e) => setFormData((f) => ({ ...f, age_at_death: e.target.value ? parseInt(e.target.value) : undefined }))}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     />
                   </div>
