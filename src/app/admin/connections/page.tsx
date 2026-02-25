@@ -48,6 +48,9 @@ export default function AdminConnectionsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<Record<string, string>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Connection> | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -97,6 +100,57 @@ export default function AdminConnectionsPage() {
           ? prev.map(c => c.id === id ? { ...c, status: action === 'approve' ? 'approved' : 'rejected' } : c)
           : prev.filter(c => c.id !== id)
       );
+    } catch (e: any) {
+      setActionError(prev => ({ ...prev, [id]: e.message }));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEdit = (conn: Connection) => {
+    setEditingId(conn.id);
+    setEditForm(conn);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editForm) return;
+    setActionLoading('edit-' + editingId);
+    setActionError(prev => ({ ...prev, [editingId]: '' }));
+    try {
+      const res = await fetch(`/api/connections/${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notes: editForm.notes,
+          review_notes: editForm.review_notes,
+          status: editForm.status,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to update');
+      setConnections(prev =>
+        prev.map(c => c.id === editingId ? { ...c, ...editForm } : c)
+      );
+      setEditingId(null);
+      setEditForm(null);
+    } catch (e: any) {
+      setActionError(prev => ({ ...prev, [editingId]: e.message }));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setActionLoading('delete-' + id);
+    setActionError(prev => ({ ...prev, [id]: '' }));
+    try {
+      const res = await fetch(`/api/connections/${id}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to delete');
+      setConnections(prev => prev.filter(c => c.id !== id));
+      setDeleteConfirm(null);
     } catch (e: any) {
       setActionError(prev => ({ ...prev, [id]: e.message }));
     } finally {
@@ -282,8 +336,84 @@ export default function AdminConnectionsPage() {
                         </div>
                       )}
 
+                      {/* Edit modal */}
+                      {editingId === conn.id && editForm && (
+                        <div className="mt-4 pt-4 border-t border-gray-100 bg-blue-50 p-4 rounded-lg">
+                          <h4 className="font-semibold text-sm mb-3 text-gray-900">Edit Connection</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                              <textarea
+                                value={editForm.notes || ''}
+                                onChange={e => setEditForm(prev => prev ? { ...prev, notes: e.target.value } : null)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                rows={2}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Review Notes</label>
+                              <textarea
+                                value={editForm.review_notes || ''}
+                                onChange={e => setEditForm(prev => prev ? { ...prev, review_notes: e.target.value } : null)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                rows={2}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                              <select
+                                value={editForm.status || 'pending'}
+                                onChange={e => setEditForm(prev => prev ? { ...prev, status: e.target.value } : null)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                              </select>
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                onClick={handleSaveEdit}
+                                disabled={actionLoading === 'edit-' + editingId}
+                                className="flex-1 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                              >
+                                {actionLoading === 'edit-' + editingId ? '...' : '✓ Save'}
+                              </button>
+                              <button
+                                onClick={() => { setEditingId(null); setEditForm(null); }}
+                                className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Delete confirmation */}
+                      {deleteConfirm === conn.id && (
+                        <div className="mt-4 pt-4 border-t border-gray-100 bg-red-50 p-4 rounded-lg">
+                          <p className="text-sm text-red-800 mb-3">Are you sure you want to delete this connection?</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDelete(conn.id)}
+                              disabled={actionLoading === 'delete-' + conn.id}
+                              className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                              {actionLoading === 'delete-' + conn.id ? '...' : '✓ Delete'}
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(null)}
+                              className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              ✕ Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Action area for pending */}
-                      {conn.status === 'pending' && (
+                      {conn.status === 'pending' && editingId !== conn.id && deleteConfirm !== conn.id && (
                         <div className="mt-4 pt-4 border-t border-gray-100">
                           <div className="flex items-center gap-3 flex-wrap">
                             <input
@@ -313,12 +443,28 @@ export default function AdminConnectionsPage() {
                     </div>
                   </div>
 
-                  {/* Status badge */}
-                  <div className="flex-shrink-0">
+                  {/* Status badge and actions */}
+                  <div className="flex-shrink-0 flex flex-col items-end gap-2">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[conn.status] || 'bg-gray-100 text-gray-700'}`}>
                       {conn.status === 'pending' ? '⏳ ' : conn.status === 'approved' ? '✓ ' : '✗ '}
                       {conn.status}
                     </span>
+                    {editingId !== conn.id && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEdit(conn)}
+                          className="px-3 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors"
+                        >
+                          ✎ Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(conn.id)}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors"
+                        >
+                          ✕ Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
