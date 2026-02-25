@@ -157,12 +157,6 @@ export default function AdminDashboard() {
               icon="🌳"
             />
             <ActionButton
-              href="/admin/committee"
-              title="Cemetery Committee"
-              description="Meetings, agendas, goals, change requests"
-              icon="🏛️"
-            />
-            <ActionButton
               href="/admin/audit-log"
               title="Audit Log"
               description="View all database changes with full history and attribution"
