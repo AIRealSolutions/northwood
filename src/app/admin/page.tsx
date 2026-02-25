@@ -132,9 +132,9 @@ export default function AdminDashboard() {
               icon="📍"
             />
             <ActionButton
-              href="/records"
+              href="/admin/records"
               title="Manage Records"
-              description="View and edit deceased records"
+              description="Add, edit, and delete deceased occupants"
               icon="📋"
             />
             <ActionButton

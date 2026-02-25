@@ -4,7 +4,70 @@ import { authOptions } from '@/lib/auth';
 import { getServiceSupabase as getSupabase } from '@/lib/supabase';
 import { writeAuditLog, auditContextFromSession } from '@/lib/audit';
 
-const ADMIN_ROLES = ['admin'];
+const ADMIN_ROLES = ['admin', 'superintendent'];
+
+// GET /api/admin/deceased — List deceased records with pagination and search
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!ADMIN_ROLES.includes(session.user.role || '')) {
+    return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const page = parseInt(searchParams.get('page') || '1');
+  const pageSize = parseInt(searchParams.get('pageSize') || '25');
+  const search = searchParams.get('search') || '';
+
+  const supabase = getSupabase();
+
+  try {
+    let query = supabase
+      .from('deceased_records')
+      .select('*, plots(id, plot_number, section, row_number, plot_position)', { count: 'exact' })
+      .order('last_name', { ascending: true })
+      .order('first_name', { ascending: true });
+
+    if (search.trim()) {
+      query = query.or(
+        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,middle_name.ilike.%${search}%`
+      );
+    }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, count, error } = await query.range(from, to);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Transform the data to flatten the plot relationship
+    const transformedData = data?.map((record: any) => ({
+      ...record,
+      plot: record.plots,
+      plots: undefined,
+    })) || [];
+
+    return NextResponse.json({
+      data: transformedData,
+      count: count || 0,
+      page,
+      pageSize,
+    });
+  } catch (error) {
+    console.error('Error fetching deceased records:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch records' },
+      { status: 500 }
+    );
+  }
+}
 
 // POST /api/admin/deceased — Create a new deceased record linked to a plot
 export async function POST(request: NextRequest) {

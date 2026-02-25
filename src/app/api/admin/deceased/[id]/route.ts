@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { getServiceSupabase as getSupabase } from '@/lib/supabase';
 import { writeAuditLog, auditContextFromSession } from '@/lib/audit';
 
-const ADMIN_ROLES = ['admin'];
+const ADMIN_ROLES = ['admin', 'superintendent'];
 
 // PUT /api/admin/deceased/[id] — Update a deceased record
 export async function PUT(
