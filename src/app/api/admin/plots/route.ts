@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         row_number: parseInt(row_number),
         plot_position: parseInt(plot_position),
         plot_type,
-        status: status || 'available',
+        status: status || 'empty',
         size_width: size_width ? parseFloat(size_width) : null,
         size_length: size_length ? parseFloat(size_length) : null,
         price: price ? parseFloat(price) : null,

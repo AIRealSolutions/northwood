@@ -71,7 +71,7 @@ export async function PUT(
       .update({ plot_id: new_plot_id })
       .eq('deceased_id', id);
 
-    // If old plot now has no remaining deceased records, mark it available
+    // If old plot now has no remaining deceased records, mark it empty
     if (oldPlotId && oldPlotId !== new_plot_id) {
       const { data: remaining } = await supabase
         .from('deceased_records')
@@ -82,7 +82,7 @@ export async function PUT(
       if (!remaining || remaining.length === 0) {
         await supabase
           .from('plots')
-          .update({ status: 'available' })
+          .update({ status: 'empty' })
           .eq('id', oldPlotId);
       }
     }

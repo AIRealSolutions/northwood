@@ -53,10 +53,10 @@ export async function POST(
     return NextResponse.json({ error: 'Destination plot not found' }, { status: 404 });
   }
 
-  // 2. Destination must be available (safety check)
-  if (destPlot.status !== 'available') {
+  // 2. Destination must be empty (safety check)
+  if (destPlot.status !== 'empty') {
     return NextResponse.json({
-      error: `Destination plot ${destPlot.plot_number} is not available (status: ${destPlot.status}). Only available plots can be used as a move destination.`
+      error: `Destination plot ${destPlot.plot_number} is not empty (status: ${destPlot.status}). Only empty plots can be used as a move destination.`
     }, { status: 409 });
   }
 
@@ -122,11 +122,11 @@ export async function POST(
     console.error('destination plot update error (non-fatal):', destUpdateErr.message);
   }
 
-  // 8. Clear source plot — mark available, remove owner info
+  // 8. Clear source plot — mark empty, remove owner info
   await supabase
     .from('plots')
     .update({
-      status: 'available',
+      status: 'empty',
       owner_name: null,
       owner_contact: null,
       purchase_date: null,

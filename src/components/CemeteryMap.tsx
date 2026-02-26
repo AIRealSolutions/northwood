@@ -23,7 +23,7 @@ const SECTIONS = [
 ];
 
 export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryMapProps) {
-  const [sectionStats, setSectionStats] = useState<Record<string, { total: number; occupied: number; available: number }>>({});
+  const [sectionStats, setSectionStats] = useState<Record<string, { total: number; occupied: number; empty: number }>>({});
   const [plots, setPlots] = useState<PlotWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,14 +43,14 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
 
   const loadSectionStats = async () => {
     try {
-      const stats: Record<string, { total: number; occupied: number; available: number }> = {};
+      const stats: Record<string, { total: number; occupied: number; empty: number }> = {};
       for (const section of SECTIONS) {
         const sectionPlots = await plotsAPI.getPlotsBySection(section.id);
         const occupied = sectionPlots.filter(p => p.status === 'occupied').length;
         stats[section.id] = {
           total: sectionPlots.length,
           occupied,
-          available: sectionPlots.length - occupied
+          empty: sectionPlots.length - occupied
         };
       }
       setSectionStats(stats);
@@ -210,7 +210,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             <div className="flex-1">
               <div className="grid grid-cols-8 gap-0.5 mb-4">
                 {SECTIONS.map((section) => {
-                  const stats = sectionStats[section.id] || { total: 0, occupied: 0, available: 0 };
+                  const stats = sectionStats[section.id] || { total: 0, occupied: 0, empty: 0 };
                   const occupancyPercent = stats.total > 0 ? (stats.occupied / stats.total) * 100 : 0;
                   
                   return (
@@ -235,7 +235,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                           </div>
                           <div className="flex justify-between">
                             <span>Open</span>
-                            <span className="font-bold text-emerald-200">{stats.available}</span>
+                            <span className="font-bold text-emerald-200">{stats.empty}</span>
                           </div>
                         </div>
                         <div className="mt-1 h-1 bg-white/20 rounded-full overflow-hidden">
@@ -458,9 +458,9 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
           </div>
           <div className="bg-white rounded-xl shadow-md p-4 text-center border border-gray-100">
             <div className="text-3xl font-black text-emerald-600">
-              {Object.values(sectionStats).reduce((sum, s) => sum + s.available, 0).toLocaleString()}
+              {Object.values(sectionStats).reduce((sum, s) => sum + s.empty, 0).toLocaleString()}
             </div>
-            <div className="text-gray-500 text-sm">Available</div>
+            <div className="text-gray-500 text-sm">Empty</div>
           </div>
           <div className="bg-white rounded-xl shadow-md p-4 text-center border border-gray-100">
             <div className="text-3xl font-black text-gray-800">8</div>
@@ -473,7 +473,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
           <div className="flex flex-wrap items-center gap-6 justify-center">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 rounded bg-emerald-400 border border-emerald-500"></div>
-              <span className="text-sm text-gray-600">Available</span>
+              <span className="text-sm text-gray-600">Empty</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 rounded bg-rose-500 border border-rose-600"></div>
@@ -617,7 +617,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
             <span className="text-sm font-medium text-gray-700">Legend:</span>
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded bg-emerald-400 border border-emerald-500"></div>
-              <span className="text-xs text-gray-600">Available</span>
+              <span className="text-xs text-gray-600">Empty</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded bg-rose-500 border border-rose-600"></div>

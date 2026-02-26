@@ -132,7 +132,7 @@ export async function PUT(
 // Only the data (deceased records, owner info) can be moved or edited.
 export async function DELETE() {
   return NextResponse.json(
-    { error: 'Plot locations cannot be deleted. Use the Move to Available Plot feature to relocate data.' },
+    { error: 'Plot locations cannot be deleted. Use the Move to Empty Plot feature to relocate data.' },
     { status: 405 }
   );
 }

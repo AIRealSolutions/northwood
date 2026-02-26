@@ -27,7 +27,7 @@ interface PlotFormProps {
 
 const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 const PLOT_TYPES = ['standard', 'cremation', 'hybrid'];
-const STATUSES = ['available', 'reserved', 'occupied'];
+const STATUSES = ['empty', 'reserved', 'occupied'];
 
 export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
   const router = useRouter();
@@ -37,7 +37,7 @@ export default function PlotForm({ initialData, plotId, mode }: PlotFormProps) {
     row_number: initialData?.row_number || '',
     plot_position: initialData?.plot_position || '',
     plot_type: initialData?.plot_type || 'standard',
-    status: initialData?.status || 'available',
+    status: initialData?.status || 'empty',
     size_width: initialData?.size_width || '',
     size_length: initialData?.size_length || '',
     price: initialData?.price || '',

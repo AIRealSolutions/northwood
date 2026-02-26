@@ -162,7 +162,7 @@ export default function BlockGridMover({
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-4 h-4 rounded bg-emerald-50 border border-emerald-200"></div>
-          <span className="text-gray-600">Available</span>
+          <span className="text-gray-600">Empty</span>
         </div>
       </div>
 

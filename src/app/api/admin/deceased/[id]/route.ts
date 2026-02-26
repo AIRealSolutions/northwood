@@ -116,7 +116,7 @@ export async function DELETE(
     return NextResponse.json({ error: error.message || 'Failed to delete record' }, { status: 500 });
   }
 
-  // If the plot now has no remaining deceased records, mark it available
+  // If the plot now has no remaining deceased records, mark it empty
   if (record?.plot_id) {
     const { data: remaining } = await supabase
       .from('deceased_records')
@@ -127,7 +127,7 @@ export async function DELETE(
     if (!remaining || remaining.length === 0) {
       await supabase
         .from('plots')
-        .update({ status: 'available' })
+        .update({ status: 'empty' })
         .eq('id', record.plot_id);
     }
   }

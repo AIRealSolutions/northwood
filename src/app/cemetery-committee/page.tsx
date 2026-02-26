@@ -226,7 +226,7 @@ function MeetingsSection({ upcoming, recent }: { upcoming: Meeting[]; recent: Me
               </div>
               <div className="flex gap-2 mt-2">
                 {m.agenda_published && (
-                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">Agenda Available</span>
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">Agenda Empty</span>
                 )}
                 {m.minutes_published && (
                   <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">Minutes Published</span>

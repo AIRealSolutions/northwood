@@ -87,7 +87,7 @@ export default function AdminRecordsPage() {
   // Plot search for adding new occupant
   const [showPlotSearch, setShowPlotSearch] = useState(false);
   const [plotSearchTerm, setPlotSearchTerm] = useState('');
-  const [availablePlots, setAvailablePlots] = useState<PlotOption[]>([]);
+  const [emptyPlots, setEmptyPlots] = useState<PlotOption[]>([]);
   const [plotSearchLoading, setPlotSearchLoading] = useState(false);
 
   // Auth check
@@ -131,17 +131,17 @@ export default function AdminRecordsPage() {
 
   const searchPlots = useCallback(async (query: string) => {
     if (!query.trim()) {
-      setAvailablePlots([]);
+      setEmptyPlots([]);
       return;
     }
 
     try {
       setPlotSearchLoading(true);
-      const res = await fetch(`/api/admin/plots/search?q=${encodeURIComponent(query)}&status=available`);
+      const res = await fetch(`/api/admin/plots/search?q=${encodeURIComponent(query)}&status=empty`);
       if (!res.ok) throw new Error('Failed to search plots');
 
       const json = await res.json();
-      setAvailablePlots(json.data || []);
+      setEmptyPlots(json.data || []);
     } catch (error) {
       console.error('Error searching plots:', error);
     } finally {
@@ -156,7 +156,7 @@ export default function AdminRecordsPage() {
     setFormSuccess('');
     setShowPlotSearch(false);
     setPlotSearchTerm('');
-    setAvailablePlots([]);
+    setEmptyPlots([]);
     setShowModal(true);
   };
 
@@ -196,7 +196,7 @@ export default function AdminRecordsPage() {
     }));
     setShowPlotSearch(false);
     setPlotSearchTerm('');
-    setAvailablePlots([]);
+    setEmptyPlots([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -544,7 +544,7 @@ export default function AdminRecordsPage() {
                         onClick={() => {
                           setShowPlotSearch(true);
                           setPlotSearchTerm('');
-                          setAvailablePlots([]);
+                          setEmptyPlots([]);
                         }}
                         className="px-3 py-1 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700"
                       >
@@ -557,7 +557,7 @@ export default function AdminRecordsPage() {
                       onClick={() => setShowPlotSearch(!showPlotSearch)}
                       className="w-full px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium"
                     >
-                      {showPlotSearch ? 'Hide Plot Search' : 'Search for Available Plot'}
+                      {showPlotSearch ? 'Hide Plot Search' : 'Search for Empty Plot'}
                     </button>
                   )}
 
@@ -586,9 +586,9 @@ export default function AdminRecordsPage() {
                         </button>
                       </div>
 
-                      {availablePlots.length > 0 && (
+                      {emptyPlots.length > 0 && (
                         <div className="border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
-                          {availablePlots.map((plot) => (
+                          {emptyPlots.map((plot) => (
                             <button
                               key={plot.id}
                               type="button"
@@ -604,8 +604,8 @@ export default function AdminRecordsPage() {
                         </div>
                       )}
 
-                      {plotSearchTerm && availablePlots.length === 0 && !plotSearchLoading && (
-                        <p className="text-sm text-gray-600">No available plots found</p>
+                      {plotSearchTerm && emptyPlots.length === 0 && !plotSearchLoading && (
+                        <p className="text-sm text-gray-600">No empty plots found</p>
                       )}
                     </div>
                   )}

@@ -12,20 +12,20 @@ interface Plot {
   row_number: number;
   plot_position: number;
   plot_type: string;
-  status: 'available' | 'reserved' | 'occupied';
+  status: 'empty' | 'reserved' | 'occupied';
   owner_name?: string;
   price?: number;
   deceased_records?: Array<{ id: string; first_name: string; last_name: string; death_date?: string }>;
 }
 
 const STATUS_COLORS = {
-  available: 'bg-green-100 text-green-800',
+  empty: 'bg-green-100 text-green-800',
   reserved: 'bg-yellow-100 text-yellow-800',
   occupied: 'bg-red-100 text-red-800',
 };
 
 const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-const STATUSES = ['available', 'reserved', 'occupied'];
+const STATUSES = ['empty', 'reserved', 'occupied'];
 
 export default function AdminPlotsPage() {
   const { data: session, status } = useSession();
@@ -132,9 +132,9 @@ export default function AdminPlotsPage() {
           </div>
           <div className="bg-white rounded-lg shadow p-4 text-center">
             <p className="text-2xl font-bold text-green-600">
-              {plots.filter(p => p.status === 'available').length}
+              {plots.filter(p => p.status === 'empty').length}
             </p>
-            <p className="text-sm text-gray-500">Available (this page)</p>
+            <p className="text-sm text-gray-500">Empty (this page)</p>
           </div>
           <div className="bg-white rounded-lg shadow p-4 text-center">
             <p className="text-2xl font-bold text-red-600">

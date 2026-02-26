@@ -49,7 +49,7 @@ export default function BurialServices() {
                   <div className="ml-4">
                     <h3 className="text-lg font-medium text-black dark:text-white">Select a Plot</h3>
                     <p className="mt-1 text-gray-600 dark:text-gray-300">
-                      Browse our interactive cemetery map to select an available plot or cremation spot that meets your needs.
+                      Browse our interactive cemetery map to select an empty plot or cremation spot that meets your needs.
                     </p>
                   </div>
                 </div>
@@ -130,7 +130,7 @@ export default function BurialServices() {
                     </div>
                   </div>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    If you don't know the Plot ID, you can leave it blank and select from available plots later.
+                    If you don't know the Plot ID, you can leave it blank and select from empty plots later.
                   </p>
                 </div>
                 

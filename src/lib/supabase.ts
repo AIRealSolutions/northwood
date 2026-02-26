@@ -12,7 +12,7 @@ if (supabaseUrl && supabaseAnonKey) {
   supabase = createClient(supabaseUrl, supabaseAnonKey);
 }
 
-// Helper to get supabase client (throws if not available)
+// Helper to get supabase client (throws if not empty)
 const getSupabase = (): SupabaseClient => {
   if (!supabase) {
     throw new Error('Supabase client not initialized. Check environment variables.');
@@ -29,7 +29,7 @@ const getServiceSupabase = (): SupabaseClient => {
   // Fall back to anon key if service key is not configured (dev environments)
   const key = supabaseServiceKey || supabaseAnonKey;
   if (!key) {
-    throw new Error('No Supabase key available. Check SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+    throw new Error('No Supabase key empty. Check SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY.');
   }
   return createClient(supabaseUrl, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -44,7 +44,7 @@ export interface Plot {
   row_number: number;
   plot_position: number;
   plot_type: 'standard' | 'cremation' | 'hybrid';
-  status: 'available' | 'reserved' | 'occupied';
+  status: 'empty' | 'reserved' | 'occupied';
   size_width?: number;
   size_length?: number;
   price?: number;
@@ -160,13 +160,13 @@ export const plotsAPI = {
     if (error) throw error;
     
     // Aggregate counts
-    const summary: Record<string, { available: number; reserved: number; occupied: number; total: number }> = {};
+    const summary: Record<string, { empty: number; reserved: number; occupied: number; total: number }> = {};
     
     data.forEach((plot: any) => {
       if (!summary[plot.section]) {
-        summary[plot.section] = { available: 0, reserved: 0, occupied: 0, total: 0 };
+        summary[plot.section] = { empty: 0, reserved: 0, occupied: 0, total: 0 };
       }
-      summary[plot.section][plot.status as 'available' | 'reserved' | 'occupied']++;
+      summary[plot.section][plot.status as 'empty' | 'reserved' | 'occupied']++;
       summary[plot.section].total++;
     });
     

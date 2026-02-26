@@ -53,7 +53,7 @@ interface Plot {
   row_number: number;
   plot_position: number;
   plot_type: string;
-  status: 'available' | 'reserved' | 'occupied';
+  status: 'empty' | 'reserved' | 'occupied';
   size_width?: number;
   size_length?: number;
   price?: number;
@@ -68,7 +68,7 @@ interface Plot {
   plot_reservations: PlotReservation[];
 }
 
-interface AvailablePlot {
+interface EmptyPlot {
   id: string;
   plot_number: string;
   section: string;
@@ -80,7 +80,7 @@ interface AvailablePlot {
 /* ─────────────────────────── Constants ─────────────────────── */
 
 const STATUS_COLORS = {
-  available: 'bg-green-100 text-green-800 border-green-200',
+  empty: 'bg-green-100 text-green-800 border-green-200',
   reserved:  'bg-yellow-100 text-yellow-800 border-yellow-200',
   occupied:  'bg-red-100 text-red-800 border-red-200',
 };
@@ -112,7 +112,7 @@ export default function AdminPlotDetailPage() {
   // ── Edit form ──
   const [editForm, setEditForm] = useState({
     plot_number: '', section: '', row_number: '', plot_position: '',
-    plot_type: 'standard', status: 'available',
+    plot_type: 'standard', status: 'empty',
     owner_name: '', owner_contact: '', purchase_date: '', price: '', notes: '',
   });
   const [editLoading, setEditLoading] = useState(false);
@@ -120,9 +120,9 @@ export default function AdminPlotDetailPage() {
   const [editSuccess, setEditSuccess] = useState('');
 
   // ── Move state ──
-  const [availablePlots, setAvailablePlots]     = useState<AvailablePlot[]>([]);
-  const [loadingAvailable, setLoadingAvailable] = useState(false);
-  const [selectedDest, setSelectedDest]         = useState<AvailablePlot | null>(null);
+  const [emptyPlots, setEmptyPlots]     = useState<EmptyPlot[]>([]);
+  const [loadingEmpty, setLoadingEmpty] = useState(false);
+  const [selectedDest, setSelectedDest]         = useState<EmptyPlot | null>(null);
   const [moveNotes, setMoveNotes]               = useState('');
   const [moving, setMoving]                     = useState(false);
   const [moveError, setMoveError]               = useState('');
@@ -159,7 +159,7 @@ export default function AdminPlotDetailPage() {
         row_number:   String(p.row_number   || ''),
         plot_position:String(p.plot_position|| ''),
         plot_type:    p.plot_type    || 'standard',
-        status:       p.status       || 'available',
+        status:       p.status       || 'empty',
         owner_name:   p.owner_name   || '',
         owner_contact:p.owner_contact|| '',
         purchase_date:p.purchase_date ? p.purchase_date.split('T')[0] : '',
@@ -173,22 +173,22 @@ export default function AdminPlotDetailPage() {
     }
   };
 
-  /* ── Load available plots for move tab ── */
-  const loadAvailablePlots = useCallback(async (section: string, rowNumber: number) => {
-    setLoadingAvailable(true);
-    setAvailablePlots([]);
+  /* ── Load empty plots for move tab ── */
+  const loadEmptyPlots = useCallback(async (section: string, rowNumber: number) => {
+    setLoadingEmpty(true);
+    setEmptyPlots([]);
     try {
       const res  = await fetch(`/api/admin/plots/section/${section}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
-      const available = (json.plots || []).filter(
-        (p: any) => p.status === 'available' && p.id !== plotId && p.row_number === rowNumber
+      const empty = (json.plots || []).filter(
+        (p: any) => p.status === 'empty' && p.id !== plotId && p.row_number === rowNumber
       );
-      setAvailablePlots(available);
+      setEmptyPlots(empty);
     } catch {
-      setAvailablePlots([]);
+      setEmptyPlots([]);
     } finally {
-      setLoadingAvailable(false);
+      setLoadingEmpty(false);
     }
   }, [plotId]);
 
@@ -198,7 +198,7 @@ export default function AdminPlotDetailPage() {
     setEditError(''); setEditSuccess('');
     setMoveError(''); setMoveSuccess('');
     setSelectedDest(null); setMoveNotes('');
-    if (next === 'move' && plot) loadAvailablePlots(plot.section, plot.row_number);
+    if (next === 'move' && plot) loadEmptyPlots(plot.section, plot.row_number);
   };
 
   /* ── Edit submit ── */
@@ -653,7 +653,7 @@ export default function AdminPlotDetailPage() {
                       <select value={editForm.status}
                         onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                        <option value="available">Available</option>
+                        <option value="empty">Empty</option>
                         <option value="reserved">Reserved</option>
                         <option value="occupied">Occupied</option>
                       </select>
@@ -731,8 +731,8 @@ export default function AdminPlotDetailPage() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
               <h2 className="text-sm font-semibold text-amber-900 mb-1">Move Plot Data — Block {plot.section}{plot.row_number}</h2>
               <p className="text-sm text-amber-800">
-                Select an <strong>available</strong> plot in the same block (Section {plot.section}, Row {plot.row_number}).
-                All records will transfer to the new location and <strong>{plot.plot_number}</strong> will become available.
+                Select an <strong>empty</strong> plot in the same block (Section {plot.section}, Row {plot.row_number}).
+                All records will transfer to the new location and <strong>{plot.plot_number}</strong> will become empty.
               </p>
             </div>
 
@@ -758,19 +758,19 @@ export default function AdminPlotDetailPage() {
                   </div>
 
                   <div className="px-5 py-4">
-                    {loadingAvailable ? (
+                    {loadingEmpty ? (
                       <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-500" />
-                        Loading available plots…
+                        Loading empty plots…
                       </div>
-                    ) : availablePlots.length === 0 ? (
+                    ) : emptyPlots.length === 0 ? (
                       <div className="text-center py-8 text-gray-400">
-                        <p className="text-sm font-medium">No available plots in Block {plot.section}{plot.row_number}</p>
+                        <p className="text-sm font-medium">No empty plots in Block {plot.section}{plot.row_number}</p>
                         <p className="text-xs mt-1">All positions in this row are occupied or reserved.</p>
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {availablePlots
+                        {emptyPlots
                           .sort((a, b) => a.plot_position - b.plot_position)
                           .map(ap => {
                             const sel = selectedDest?.id === ap.id;
@@ -812,7 +812,7 @@ export default function AdminPlotDetailPage() {
                             </p>
                           )}
                           <span className="inline-block mt-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200">
-                            → becomes available
+                            → becomes empty
                           </span>
                         </div>
                         <div className="bg-amber-50 rounded-lg border border-amber-200 p-4">
@@ -821,7 +821,7 @@ export default function AdminPlotDetailPage() {
                           <p className="text-xs text-gray-500 mt-0.5">Section {selectedDest.section} · Row {selectedDest.row_number} · Pos {selectedDest.plot_position}</p>
                           <p className="text-xs text-gray-500 capitalize mt-0.5">{selectedDest.plot_type}</p>
                           <span className="inline-block mt-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
-                            currently available
+                            currently empty
                           </span>
                         </div>
                       </div>
