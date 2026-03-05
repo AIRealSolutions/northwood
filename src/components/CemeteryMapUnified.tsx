@@ -1,4 +1,3 @@
-'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -33,16 +32,16 @@ interface SectionDef {
 }
 
 const ALL_SECTIONS: SectionDef[] = [
-  { id: 'A',  displayName: 'Section A',  dbSection: 'A', westRoad: 'Azalea',     eastRoad: 'Beech',      color: 'from-emerald-500 to-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4\u2032" },
-  { id: 'B',  displayName: 'Section B',  dbSection: 'B', westRoad: 'Beech',      eastRoad: 'Chinquapin', color: 'from-teal-500 to-teal-700',    bgColor: 'bg-teal-50',    borderColor: 'border-teal-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4\u2032" },
-  { id: 'C',  displayName: 'Section C',  dbSection: 'C', westRoad: 'Chinquapin', eastRoad: 'Dogwood',    color: 'from-cyan-500 to-cyan-700',    bgColor: 'bg-cyan-50',    borderColor: 'border-cyan-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4\u2032" },
-  { id: 'D',  displayName: 'Section D',  dbSection: 'D', westRoad: 'Dogwood',    eastRoad: 'Elm',        color: 'from-sky-500 to-sky-700',      bgColor: 'bg-sky-50',     borderColor: 'border-sky-200',     maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4\u2032" },
-  { id: 'E',  displayName: 'Section E',  dbSection: 'E', westRoad: 'Elm',        eastRoad: 'Fig',        color: 'from-blue-500 to-blue-700',    bgColor: 'bg-blue-50',    borderColor: 'border-blue-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4\u2032" },
-  { id: 'F',  displayName: 'Section F',  dbSection: 'F', westRoad: 'Fig',        eastRoad: 'Gardenia',   color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4\u2032" },
-  { id: 'G1', displayName: 'Section G1', dbSection: 'G', westRoad: 'Gardenia',   eastRoad: 'Gladiola',   color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 182, splitRow: 91,  positionsPerRow: 4, rowStart: 1,   rowEnd: 182, plotWidth: "5\u2032" },
-  { id: 'G2', displayName: 'Section G2', dbSection: 'G', westRoad: 'Gladiola',   eastRoad: 'Heather',    color: 'from-fuchsia-500 to-fuchsia-700', bgColor: 'bg-fuchsia-50', borderColor: 'border-fuchsia-200', maxRow: 386, splitRow: 284, positionsPerRow: 4, rowStart: 183, rowEnd: 386, plotWidth: "5\u2032" },
-  { id: 'H1', displayName: 'Section H1', dbSection: 'H', westRoad: 'Heather',    eastRoad: 'Hydrangea',  color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 517, splitRow: 259, positionsPerRow: 4, rowStart: 1,   rowEnd: 517, plotWidth: "9\u2032" },
-  { id: 'H2', displayName: 'Section H2', dbSection: 'H', westRoad: 'Hydrangea',  eastRoad: 'Border',     color: 'from-rose-500 to-rose-700',    bgColor: 'bg-rose-50',    borderColor: 'border-rose-200',    maxRow: 582, splitRow: 550, positionsPerRow: 4, rowStart: 518, rowEnd: 582, plotWidth: "9\u2032" },
+  { id: 'A',  displayName: 'Section A',  dbSection: 'A', westRoad: 'Azalea',     eastRoad: 'Beech',      color: 'from-emerald-500 to-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
+  { id: 'B',  displayName: 'Section B',  dbSection: 'B', westRoad: 'Beech',      eastRoad: 'Chinquapin', color: 'from-teal-500 to-teal-700',    bgColor: 'bg-teal-50',    borderColor: 'border-teal-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
+  { id: 'C',  displayName: 'Section C',  dbSection: 'C', westRoad: 'Chinquapin', eastRoad: 'Dogwood',    color: 'from-cyan-500 to-cyan-700',    bgColor: 'bg-cyan-50',    borderColor: 'border-cyan-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
+  { id: 'D',  displayName: 'Section D',  dbSection: 'D', westRoad: 'Dogwood',    eastRoad: 'Elm',        color: 'from-sky-500 to-sky-700',      bgColor: 'bg-sky-50',     borderColor: 'border-sky-200',     maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
+  { id: 'E',  displayName: 'Section E',  dbSection: 'E', westRoad: 'Elm',        eastRoad: 'Fig',        color: 'from-blue-500 to-blue-700',    bgColor: 'bg-blue-50',    borderColor: 'border-blue-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
+  { id: 'F',  displayName: 'Section F',  dbSection: 'F', westRoad: 'Fig',        eastRoad: 'Gardenia',   color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
+  { id: 'G1', displayName: 'Section G1', dbSection: 'G', westRoad: 'Gardenia',   eastRoad: 'Gladiola',   color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 182, splitRow: 91,  positionsPerRow: 4, rowStart: 1,   rowEnd: 182, plotWidth: "5′" },
+  { id: 'G2', displayName: 'Section G2', dbSection: 'G', westRoad: 'Gladiola',   eastRoad: 'Heather',    color: 'from-fuchsia-500 to-fuchsia-700', bgColor: 'bg-fuchsia-50', borderColor: 'border-fuchsia-200', maxRow: 386, splitRow: 284, positionsPerRow: 4, rowStart: 183, rowEnd: 386, plotWidth: "5′" },
+  { id: 'H1', displayName: 'Section H1', dbSection: 'H', westRoad: 'Heather',    eastRoad: 'Hydrangea',  color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 517, splitRow: 259, positionsPerRow: 4, rowStart: 1,   rowEnd: 517, plotWidth: "9′" },
+  { id: 'H2', displayName: 'Section H2', dbSection: 'H', westRoad: 'Hydrangea',  eastRoad: 'Border',     color: 'from-rose-500 to-rose-700',    bgColor: 'bg-rose-50',    borderColor: 'border-rose-200',    maxRow: 582, splitRow: 550, positionsPerRow: 4, rowStart: 518, rowEnd: 582, plotWidth: "9′" },
 ];
 
 export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnifiedProps) {
@@ -57,7 +56,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
   const plotRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
+  const [startY, setStartY] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -99,62 +100,80 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const getDeceasedName = (plot: PlotWithDetails): string => {
+    if (plot.deceased_records && plot.deceased_records.length > 0) {
+      const deceased = plot.deceased_records[0];
+      return `${deceased.first_name || ''} ${deceased.last_name || ''}`.trim();
+    }
+    return plot.owner_name || '';
+  };
+
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'occupied': return 'bg-rose-500 border-rose-600';
+      case 'reserved': return 'bg-amber-400 border-amber-500';
+      default: return 'bg-emerald-400 border-emerald-500';
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!scrollContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
+    setStartY(e.pageY - scrollContainerRef.current.offsetTop);
+    setScrollLeft(scrollContainerRef.current.scrollLeft);
+    setScrollTop(scrollContainerRef.current.scrollTop);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const y = e.pageY - scrollContainerRef.current.offsetTop;
+    const walkX = (x - startX) * 1.5;
+    const walkY = (y - startY) * 1.5;
+    scrollContainerRef.current.scrollLeft = scrollLeft - walkX;
+    scrollContainerRef.current.scrollTop = scrollTop - walkY;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const scrollToSection = (index: number) => {
+    setCurrentSection(index);
+    const section = sectionRefs.current[ALL_SECTIONS[index].id];
+    if (section && scrollContainerRef.current) {
+      const sectionLeft = section.offsetLeft - scrollContainerRef.current.offsetLeft;
+      scrollContainerRef.current.scrollLeft = sectionLeft;
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) {
       setShowSearch(false);
       setSearchResults([]);
       return;
     }
-    try {
-      const results = await plotsAPI.searchPlots(searchQuery);
-      setSearchResults(results);
-      setShowSearch(true);
-    } catch (error) {
-      console.error('Error searching:', error);
-    }
-  };
-
-  const scrollToSection = (index: number) => {
-    setCurrentSection(index);
-    const sectionId = ALL_SECTIONS[index].id;
-    const el = sectionRefs.current[sectionId];
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
-    }
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!scrollContainerRef.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
-    setScrollLeft(scrollContainerRef.current.scrollLeft);
-  };
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !scrollContainerRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - scrollContainerRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-  const handleMouseUp = () => setIsDragging(false);
-  const handleMouseLeave = () => setIsDragging(false);
-
-  const getDeceasedName = (plot: PlotWithDetails) => {
-    const deceased = plot.deceased_records?.[0];
-    return deceased ? `${deceased.first_name} ${deceased.last_name}` : null;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'occupied': return 'bg-rose-500 hover:bg-rose-600 border-rose-600';
-      case 'reserved': return 'bg-amber-400 hover:bg-amber-500 border-amber-500';
-      default: return 'bg-emerald-400 hover:bg-emerald-500 border-emerald-500';
-    }
+    const query = searchQuery.toLowerCase();
+    const results = Object.values(allPlots)
+      .flat()
+      .filter(plot =>
+        plot.plot_number.toLowerCase().includes(query) ||
+        getDeceasedName(plot).toLowerCase().includes(query)
+      )
+      .slice(0, 20);
+    setSearchResults(results);
+    setShowSearch(true);
   };
 
   /* ================================================================ */
-  /* A-F ROW RENDERING (8-position matrix, 4 pairs)                    */
+  /* A-F ROW RENDERING (8 positions, 4 pairs)                         */
   /* ================================================================ */
 
   const renderRowMatrixAF = (
@@ -163,22 +182,27 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     rowPlots: PlotWithDetails[],
     sectionColor: string
   ) => {
-    const positionPairs = facingDirection === 'west'
-      ? [[1, 5], [2, 6], [3, 7], [4, 8]]
-      : [[8, 4], [7, 3], [6, 2], [5, 1]];
+    const positions = [1, 2, 3, 4, 5, 6, 7, 8];
+    const pairs = [
+      { label: 'I', positions: [1, 2] },
+      { label: 'II', positions: [3, 4] },
+      { label: 'III', positions: [5, 6] },
+      { label: 'IV', positions: [7, 8] },
+    ];
+    const orderedPairs = facingDirection === 'west' ? pairs : [...pairs].reverse();
 
     return (
-      <div className="mb-1.5" key={row}>
-        <div className="text-[8px] text-gray-500 mb-0.5">Row {row}</div>
+      <div className="mb-1" key={row}>
+        <div className="text-[7px] text-gray-500 mb-0.5">R{row}</div>
         <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
-          {positionPairs.map(([pos1, pos2]) => (
-            <div key={`${pos1}-${pos2}`} className="flex gap-0.5 mb-0.5 last:mb-0">
-              {[pos1, pos2].map((pos) => {
+          {orderedPairs.map((pair) => (
+            <div key={pair.label} className="flex gap-0.5 mb-0.5 last:mb-0">
+              {pair.positions.map((pos) => {
                 const plot = rowPlots.find(p => p.plot_position === pos);
                 if (!plot) {
                   return (
-                    <div key={pos} className="w-7 h-5 rounded-sm bg-gray-200 flex items-center justify-center">
-                      <span className="text-[7px] text-gray-400">{pos}</span>
+                    <div key={pos} className="w-4 h-4 rounded-sm bg-gray-200 flex items-center justify-center">
+                      <span className="text-[5px] text-gray-400">{pos}</span>
                     </div>
                   );
                 }
@@ -187,10 +211,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
                   <div key={pos} ref={(el) => { plotRefs.current[plot.plot_number] = el; }}>
                     <Link
                       href={`/plot/${plot.id}`}
-                      className={`w-7 h-5 rounded-sm flex items-center justify-center text-white shadow-sm border transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10 ${getStatusColor(plot.status)}`}
-                      title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+                      className={`w-4 h-4 rounded-sm flex items-center justify-center text-white shadow-sm border transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10 ${getStatusColor(plot.status)}`}
+                      title={`${plot.plot_number}${deceasedName ? '\n' + deceasedName : ''}\nRow ${row}, Pos ${pos}`}
                     >
-                      <span className="text-[7px] font-bold">{pos}</span>
+                      <span className="text-[5px] font-bold">{pos}</span>
                     </Link>
                   </div>
                 );
@@ -213,9 +237,6 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     sectionColor: string,
     maxPos: number
   ) => {
-    // G/H rows have 1-4 positions. Render them in a single column.
-    // West-facing: positions 1,2,3,4 top to bottom
-    // East-facing: positions 4,3,2,1 top to bottom (reversed)
     const positions = Array.from({ length: maxPos }, (_, i) => i + 1);
     const orderedPositions = facingDirection === 'west' ? positions : [...positions].reverse();
 
@@ -314,8 +335,8 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
           </div>
         </div>
 
-        {/* Section Body */}
-        <div className="flex-1 bg-white rounded-lg shadow-md p-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+        {/* Section Body - NO internal scrolling */}
+        <div className="flex-1 bg-white rounded-lg shadow-md p-1">
           <div className="flex gap-1 h-full">
             {/* West Road Label */}
             <div className="w-8 flex-shrink-0 bg-amber-100 rounded flex items-center justify-center border border-amber-300">
@@ -324,8 +345,8 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               </span>
             </div>
 
-            {/* West Strip */}
-            <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor} overflow-y-auto`} style={{ scrollbarWidth: 'thin' }}>
+            {/* West Strip - NO internal scrolling */}
+            <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
               <div className="text-center mb-1">
                 <span className="text-[9px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows {section.rowStart}-{section.splitRow} ↑
@@ -342,14 +363,14 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               </div>
             </div>
 
-            {/* East Strip */}
-            <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor} overflow-y-auto`} style={{ scrollbarWidth: 'thin' }}>
+            {/* East Strip - NO internal scrolling */}
+            <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
               <div className="text-center mb-1">
                 <span className="text-[9px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
                   Rows {section.splitRow + 1}-{section.rowEnd} ↓
                 </span>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-start">
                 <div className="inline-block">
                   {eastStripRows.map((row) =>
                     isGH
@@ -361,9 +382,9 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             </div>
 
             {/* East Road Label */}
-            <div className={`w-8 flex-shrink-0 ${isLastSection ? 'bg-gray-800' : 'bg-amber-100'} rounded flex items-center justify-center ${isLastSection ? '' : 'border border-amber-300'}`}>
-              <span className={`transform rotate-90 whitespace-nowrap text-[10px] font-bold ${isLastSection ? 'text-white' : 'text-amber-800'}`}>
-                {isLastSection ? 'PROPERTY BORDER' : section.eastRoad}
+            <div className="w-8 flex-shrink-0 bg-amber-100 rounded flex items-center justify-center border border-amber-300">
+              <span className="transform -rotate-90 whitespace-nowrap text-[10px] font-bold text-amber-800">
+                {isLastSection ? 'Border' : section.eastRoad}
               </span>
             </div>
           </div>
@@ -396,7 +417,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
             <div>
               <h1 className="text-xl font-bold text-gray-800">Northwood Cemetery Map</h1>
               <p className="text-gray-500 text-xs">
-                {isMobile ? 'Swipe left/right to navigate sections' : 'Scroll horizontally to view all sections'}
+                {isMobile ? 'Drag to move the map' : 'Drag to move the entire map, or use navigation buttons'}
               </p>
             </div>
             <form onSubmit={handleSearch} className="flex gap-2">
@@ -512,11 +533,11 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
         </span>
       </div>
 
-      {/* Main Map Container - ALL sections scroll horizontally */}
+      {/* Main Map Container - ENTIRE MAP MOVES AS ONE UNIT */}
       <div className="flex-1 relative overflow-hidden">
         <div
           ref={scrollContainerRef}
-          className={`flex h-full overflow-x-auto overflow-y-hidden ${
+          className={`flex h-full overflow-x-auto overflow-y-auto ${
             isMobile ? 'snap-x snap-mandatory' : ''
           } scroll-smooth ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{ scrollbarWidth: 'thin' }}
