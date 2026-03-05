@@ -1,17 +1,15 @@
 'use client';
 
 import { Suspense } from 'react';
-import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
+import CemeteryMapUnified from '@/components/CemeteryMapUnified';
 
-// Dynamic import to avoid SSR issues with canvas
-const CemeteryMapCanvas = dynamic(() => import('@/components/CemeteryMapCanvas'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-screen">
-      <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600"></div>
-    </div>
-  ),
-});
+function CemeteryMapContent() {
+  const searchParams = useSearchParams();
+  const highlightPlot = searchParams.get('highlight') || undefined;
+
+  return <CemeteryMapUnified highlightPlot={highlightPlot} />;
+}
 
 export default function CemeteryMapPage() {
   return (
@@ -20,7 +18,7 @@ export default function CemeteryMapPage() {
         <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600"></div>
       </div>
     }>
-      <CemeteryMapCanvas />
+      <CemeteryMapContent />
     </Suspense>
   );
 }
