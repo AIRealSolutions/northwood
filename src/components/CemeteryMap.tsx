@@ -529,71 +529,47 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
     const rowPlots = plotsByRow[row] || [];
     // West (ascending): Normal order [1,5], [2,6], [3,7], [4,8]
     // East (descending): Reversed order [8,4], [7,3], [6,2], [5,1]
-    const positionPairs = facingDirection === 'west'
-      ? [[1, 5], [2, 6], [3, 7], [4, 8]]
-      : [[8, 4], [7, 3], [6, 2], [5, 1]];
+    const frontRowPositions = row <= 37 ? [1, 2, 3, 4] : [5, 6, 7, 8];
+    const backRowPositions = row <= 37 ? [5, 6, 7, 8] : [1, 2, 3, 4];
+
+    const renderPlot = (position: number) => {
+      const plot = rowPlots.find(p => p.plot_position === position);
+      if (!plot) {
+        return (
+          <div className="w-8 h-6 rounded-sm bg-gray-200 flex items-center justify-center">
+            <span className="text-[8px] text-gray-400">{position}</span>
+          </div>
+        );
+      }
+      const deceasedName = getDeceasedName(plot);
+      return (
+        <Link
+          href={`/plot/${plot.id}`}
+          className={`
+            w-8 h-6 rounded-sm flex items-center justify-center 
+            text-white shadow-sm border
+            transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
+            ${getStatusColor(plot.status)}
+          `}
+          title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
+        >
+          <span className="text-[8px] font-bold">{getDisplayPlotNumber(row, position)}</span>
+        </Link>
+      );
+    };
     
     return (
       <div className="mb-2">
         <div className="text-[9px] text-gray-500 mb-1">Row {row}</div>
         <div className={`bg-white rounded border ${facingDirection === 'west' ? 'border-emerald-200' : 'border-blue-200'} p-1`}>
-          {/* 4 rows x 2 columns - vertical layout */}
-          {positionPairs.map(([pos1, pos2]) => (
-            <div key={`${pos1}-${pos2}`} className="flex gap-0.5 mb-0.5 last:mb-0">
-              {/* Position 1-4 (left column) */}
-              {(() => {
-                const plot = rowPlots.find(p => p.plot_position === pos1);
-                if (!plot) {
-                  return (
-                    <div className="w-8 h-6 rounded-sm bg-gray-200 flex items-center justify-center">
-                      <span className="text-[8px] text-gray-400">{pos1}</span>
-                    </div>
-                  );
-                }
-                const deceasedName = getDeceasedName(plot);
-                return (
-                  <Link
-                    href={`/plot/${plot.id}`}
-                    className={`
-                      w-8 h-6 rounded-sm flex items-center justify-center 
-                      text-white shadow-sm border
-                      transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
-                      ${getStatusColor(plot.status)}
-                    `}
-                    title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                  >
-                    <span className="text-[8px] font-bold">{getDisplayPlotNumber(row, pos1)}</span>
-                  </Link>
-                );
-              })()}
-              {/* Position 5-8 (right column) */}
-              {(() => {
-                const plot = rowPlots.find(p => p.plot_position === pos2);
-                if (!plot) {
-                  return (
-                    <div className="w-8 h-6 rounded-sm bg-gray-200 flex items-center justify-center">
-                      <span className="text-[8px] text-gray-400">{pos2}</span>
-                    </div>
-                  );
-                }
-                const deceasedName = getDeceasedName(plot);
-                return (
-                  <Link
-                    href={`/plot/${plot.id}`}
-                    className={`
-                      w-8 h-6 rounded-sm flex items-center justify-center 
-                      text-white shadow-sm border
-                      transition-all duration-150 hover:scale-105 hover:shadow-lg hover:z-10
-                      ${getStatusColor(plot.status)}
-                    `}
-                    title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
-                  >
-                    <span className="text-[8px] font-bold">{getDisplayPlotNumber(row, pos2)}</span>
-                  </Link>
-                );
-              })()}
-            </div>
-          ))}
+          {/* Front Row (closest to road) */}
+          <div className="flex gap-0.5 mb-0.5">
+            {frontRowPositions.map(renderPlot)}
+          </div>
+          {/* Back Row */}
+          <div className="flex gap-0.5">
+            {backRowPositions.map(renderPlot)}
+          </div>
         </div>
       </div>
     );
