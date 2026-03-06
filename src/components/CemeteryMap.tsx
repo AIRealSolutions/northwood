@@ -505,6 +505,19 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
     plotsByRow[parseInt(row)].sort((a, b) => (a.plot_position || 0) - (b.plot_position || 0));
   });
   
+  // Function to get display plot number based on row and position
+  const getDisplayPlotNumber = (rowNum: number, position: number): number => {
+    if (rowNum <= 37) {
+      // Rows 1-37: Front row (facing road) = 1,2,3,4; Back row = 5,6,7,8
+      return position;
+    } else {
+      // Rows 38-76: Front row (facing road) = 5,6,7,8; Back row = 1,2,3,4
+      // Swap positions: 1->5, 2->6, 3->7, 4->8, 5->1, 6->2, 7->3, 8->4
+      const swapMap: Record<number, number> = { 1: 5, 2: 6, 3: 7, 4: 8, 5: 1, 6: 2, 7: 3, 8: 4 };
+      return swapMap[position] || position;
+    }
+  };
+  
   const allRows = Object.keys(plotsByRow).map(Number).sort((a, b) => a - b);
   
   // Split into two groups
@@ -549,7 +562,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                     `}
                     title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
                   >
-                    <span className="text-[8px] font-bold">{pos1}</span>
+                    <span className="text-[8px] font-bold">{getDisplayPlotNumber(row, pos1)}</span>
                   </Link>
                 );
               })()}
@@ -575,7 +588,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                     `}
                     title={deceasedName ? `${plot.plot_number}\n${deceasedName}` : plot.plot_number}
                   >
-                    <span className="text-[8px] font-bold">{pos2}</span>
+                    <span className="text-[8px] font-bold">{getDisplayPlotNumber(row, pos2)}</span>
                   </Link>
                 );
               })()}
