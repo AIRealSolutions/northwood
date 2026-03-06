@@ -698,3 +698,4 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
     </div>
   );
 }
+// Restore morning build
