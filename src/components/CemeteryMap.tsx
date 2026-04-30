@@ -308,8 +308,8 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                       <div className="mb-3">
                         <div className="text-[9px] font-bold text-emerald-700 mb-1">Row 37 (North end)</div>
                         <div className="bg-white rounded border border-emerald-300 p-2">
-                          {/* Normal order for ascending side */}
-                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                          {/* Ascending: position 4&8 at north, 1&5 at south */}
+                          {[[4,8], [3,7], [2,6], [1,5]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
                               <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
@@ -321,14 +321,14 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                           ))}
                         </div>
                       </div>
-                      
+
                       <div className="text-center text-[9px] text-gray-400 my-2">...</div>
-                      
+
                       {/* Example row 1 */}
                       <div>
                         <div className="text-[9px] font-bold text-emerald-700 mb-1">Row 1 (South end)</div>
                         <div className="bg-white rounded border border-emerald-300 p-2">
-                          {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                          {[[4,8], [3,7], [2,6], [1,5]].map(([p1, p2]) => (
                             <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
                               <div className="w-10 h-8 bg-emerald-400 rounded flex items-center justify-center">
                                 <span className="text-white font-bold text-xs">{p1}</span>
@@ -421,7 +421,7 @@ export default function CemeteryMap({ onPlotSelect, selectedSection }: CemeteryM
                   </div>
                   <div className="bg-white border border-gray-300 rounded p-2">
                     <div className="text-[8px] text-gray-400 mb-1 text-center">West ← → East</div>
-                    {[[1,5], [2,6], [3,7], [4,8]].map(([p1, p2]) => (
+                    {[[4,8], [3,7], [2,6], [1,5]].map(([p1, p2]) => (
                       <div key={`${p1}-${p2}`} className="flex gap-1 mb-1 last:mb-0">
                         <div className="w-7 h-6 bg-gray-400 rounded flex items-center justify-center">
                           <span className="text-[9px] text-white font-bold">{p1}</span>
