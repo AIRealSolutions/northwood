@@ -224,51 +224,6 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
   };
 
   /* ================================================================ */
-  /* G/H ROW RENDERING (1-4 positions, variable width)                 */
-  /* ================================================================ */
-
-  const renderRowMatrixGH = (
-    row: number,
-    facingDirection: 'west' | 'east',
-    rowPlots: PlotWithDetails[],
-    sectionColor: string,
-    maxPos: number
-  ) => {
-    const positions = Array.from({ length: maxPos }, (_, i) => i + 1);
-    const orderedPositions = facingDirection === 'west' ? positions : [...positions].reverse();
-
-    return (
-      <div className="mb-1" key={row}>
-        <div className="text-[7px] text-gray-500 mb-0.5">R{row}</div>
-        <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
-          {orderedPositions.map((pos) => {
-            const plot = rowPlots.find(p => p.plot_position === pos);
-            if (!plot) {
-              return (
-                <div key={pos} className="w-8 h-4 rounded-sm bg-gray-200 flex items-center justify-center mb-0.5 last:mb-0">
-                  <span className="text-[6px] text-gray-400">{pos}</span>
-                </div>
-              );
-            }
-            const deceasedName = getDeceasedName(plot);
-            return (
-              <div key={pos} ref={(el) => { plotRefs.current[plot.plot_number] = el; }} className="mb-0.5 last:mb-0">
-                <Link
-                  href={`/plot/${plot.id}`}
-                  className={`w-8 h-4 rounded-sm flex items-center justify-center text-white shadow-sm border transition-all duration-150 hover:scale-110 hover:shadow-lg hover:z-10 ${getStatusColor(plot.status)}`}
-                  title={`${plot.plot_number}${deceasedName ? '\n' + deceasedName : ''}\nRow ${row}, Pos ${pos}`}
-                >
-                  <span className="text-[6px] font-bold">{pos}</span>
-                </Link>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  /* ================================================================ */
   /* UNIFIED SECTION RENDERING                                         */
   /* ================================================================ */
 
@@ -280,12 +235,10 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     );
 
     const plotsByRow: Record<number, PlotWithDetails[]> = {};
-    let maxPosInSection = section.positionsPerRow;
     plots.forEach(plot => {
       const row = plot.row_number || 1;
       if (!plotsByRow[row]) plotsByRow[row] = [];
       plotsByRow[row].push(plot);
-      if ((plot.plot_position || 1) > maxPosInSection) maxPosInSection = plot.plot_position || 1;
     });
     Object.keys(plotsByRow).forEach(row => {
       plotsByRow[parseInt(row)].sort((a, b) => (a.plot_position || 0) - (b.plot_position || 0));
@@ -298,16 +251,123 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     const isGH = section.positionsPerRow <= 4;
     const isLastSection = section.eastRoad === 'Border';
 
-    // For G/H, compute max positions per row for each strip
-    const getMaxPosForRows = (rows: number[]) => {
-      let mp = 1;
-      rows.forEach(r => {
-        (plotsByRow[r] || []).forEach(p => {
-          if ((p.plot_position || 1) > mp) mp = p.plot_position || 1;
-        });
-      });
-      return mp;
-    };
+    // Heatmap bounding box for Perpetual Care sections (G/H)
+    if (isGH) {
+      const occupied = plots.filter(p => p.status === 'occupied').length;
+      const available = plots.filter(p => p.status === 'available').length;
+      const reserved = plots.filter(p => p.status === 'reserved').length;
+
+      const rowBar = (row: number) => {
+        const rp = plotsByRow[row] || [];
+        const maxPos = Math.max(...rp.map(p => p.plot_position || 1), 1);
+        const occ = rp.filter(p => p.status === 'occupied').length;
+        const tot = rp.length;
+        const ratio = tot > 0 ? occ / tot : 0;
+        const color =
+          ratio >= 0.8 ? 'bg-rose-600' :
+          ratio >= 0.5 ? 'bg-rose-400' :
+          ratio >= 0.2 ? 'bg-amber-400' :
+          'bg-emerald-400';
+        const widthPct = Math.round((maxPos / 4) * 100);
+        return (
+          <div
+            key={row}
+            className={`${color} rounded-sm mb-px opacity-90`}
+            style={{ height: '2px', width: `${widthPct}%` }}
+            title={`Row ${row}: ${tot} plots (${occ} occupied)`}
+          />
+        );
+      };
+
+      return (
+        <div
+          key={section.id}
+          ref={(el) => { sectionRefs.current[section.id] = el; }}
+          className={`flex-shrink-0 min-h-full flex flex-col w-36 ${isMobile ? 'w-full' : ''} px-1`}
+        >
+          {/* Header */}
+          <div className={`bg-gradient-to-r ${section.color} rounded-lg shadow-md p-2 mb-1`}>
+            <h3 className="text-sm font-black text-white leading-tight">{section.displayName}</h3>
+            <p className="text-white/70 text-[8px]">Perpetual Care</p>
+            <p className="text-white/60 text-[8px]">
+              {section.westRoad} {isLastSection ? '→ Border' : `↔ ${section.eastRoad}`}
+            </p>
+            <div className="mt-1 grid grid-cols-3 gap-0.5 text-center text-[7px]">
+              <div className="bg-white/20 rounded px-0.5 py-0.5">
+                <div className="font-bold text-white text-[9px]">{plots.length}</div>
+                <div className="text-white/70">Total</div>
+              </div>
+              <div className="bg-white/20 rounded px-0.5 py-0.5">
+                <div className="font-bold text-emerald-200 text-[9px]">{available}</div>
+                <div className="text-white/70">Open</div>
+              </div>
+              <div className="bg-white/20 rounded px-0.5 py-0.5">
+                <div className="font-bold text-rose-200 text-[9px]">{occupied}</div>
+                <div className="text-white/70">Used</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bounding Box Body */}
+          <div className="flex-1 bg-white rounded-lg shadow-md p-1 border border-gray-200">
+            <div className="text-[7px] text-gray-400 text-center mb-1 italic leading-tight">
+              Layout approximate<br />Detailed map pending
+            </div>
+            <div className="flex gap-0.5 h-full">
+              {/* West road */}
+              <div className="w-4 flex-shrink-0 bg-amber-50 rounded flex items-center justify-center border border-amber-200">
+                <span className="transform -rotate-90 whitespace-nowrap text-[6px] font-bold text-amber-700">
+                  {section.westRoad}
+                </span>
+              </div>
+
+              {/* West strip heatmap (rows reversed: north at top) */}
+              <div className={`flex-1 ${section.bgColor} rounded p-0.5 border ${section.borderColor} overflow-hidden`}>
+                <div className="text-[6px] text-center text-gray-500 mb-0.5">
+                  R{section.rowStart}–{section.splitRow}
+                </div>
+                <div className="flex flex-col">
+                  {[...westStripRows].reverse().map(rowBar)}
+                </div>
+              </div>
+
+              {/* East strip heatmap */}
+              <div className={`flex-1 ${section.bgColor} rounded p-0.5 border ${section.borderColor} overflow-hidden`}>
+                <div className="text-[6px] text-center text-gray-500 mb-0.5">
+                  R{section.splitRow + 1}–{section.rowEnd}
+                </div>
+                <div className="flex flex-col">
+                  {eastStripRows.map(rowBar)}
+                </div>
+              </div>
+
+              {/* East road */}
+              <div className="w-4 flex-shrink-0 bg-amber-50 rounded flex items-center justify-center border border-amber-200">
+                <span className="transform -rotate-90 whitespace-nowrap text-[6px] font-bold text-amber-700">
+                  {isLastSection ? 'Border' : section.eastRoad}
+                </span>
+              </div>
+            </div>
+
+            {/* Color key */}
+            <div className="mt-1 flex gap-1.5 justify-center text-[6px] text-gray-500 flex-wrap">
+              <span className="flex items-center gap-0.5">
+                <span className="w-2 h-1.5 bg-emerald-400 rounded-sm inline-block"></span>Open
+              </span>
+              <span className="flex items-center gap-0.5">
+                <span className="w-2 h-1.5 bg-amber-400 rounded-sm inline-block"></span>Mixed
+              </span>
+              <span className="flex items-center gap-0.5">
+                <span className="w-2 h-1.5 bg-rose-500 rounded-sm inline-block"></span>Occupied
+              </span>
+            </div>
+            <div className="mt-0.5 text-center text-[6px] text-gray-400">
+              Bar width = 1–4 plots/row
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div
@@ -352,9 +412,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <div className="flex justify-start">
                 <div className="inline-block">
                   {[...westStripRows].reverse().map((row) =>
-                    isGH
-                      ? renderRowMatrixGH(row, 'west', plotsByRow[row] || [], section.borderColor, getMaxPosForRows([row]))
-                      : renderRowMatrixAF(row, 'west', plotsByRow[row] || [], section.borderColor)
+                    renderRowMatrixAF(row, 'west', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
@@ -370,9 +428,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               <div className="flex justify-start">
                 <div className="inline-block">
                   {eastStripRows.map((row) =>
-                    isGH
-                      ? renderRowMatrixGH(row, 'east', plotsByRow[row] || [], section.borderColor, getMaxPosForRows([row]))
-                      : renderRowMatrixAF(row, 'east', plotsByRow[row] || [], section.borderColor)
+                    renderRowMatrixAF(row, 'east', plotsByRow[row] || [], section.borderColor)
                   )}
                 </div>
               </div>
