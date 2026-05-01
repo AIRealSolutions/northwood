@@ -37,7 +37,7 @@ const ALL_SECTIONS: SectionDef[] = [
   { id: 'C',  displayName: 'Section C',  dbSection: 'C', westRoad: 'Chinquapin', eastRoad: 'Dogwood',    color: 'from-cyan-500 to-cyan-700',    bgColor: 'bg-cyan-50',    borderColor: 'border-cyan-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
   { id: 'D',  displayName: 'Section D',  dbSection: 'D', westRoad: 'Dogwood',    eastRoad: 'Elm',        color: 'from-sky-500 to-sky-700',      bgColor: 'bg-sky-50',     borderColor: 'border-sky-200',     maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
   { id: 'E',  displayName: 'Section E',  dbSection: 'E', westRoad: 'Elm',        eastRoad: 'Fig',        color: 'from-blue-500 to-blue-700',    bgColor: 'bg-blue-50',    borderColor: 'border-blue-200',    maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
-  { id: 'F',  displayName: 'Section F',  dbSection: 'F', westRoad: 'Fig',        eastRoad: 'Gardenia',   color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 74,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 74,  plotWidth: "4′" },
+  { id: 'F',  displayName: 'Section F',  dbSection: 'F', westRoad: 'Fig',        eastRoad: 'Gardenia',   color: 'from-indigo-500 to-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', maxRow: 37,  splitRow: 37,  positionsPerRow: 8, rowStart: 1, rowEnd: 37,  plotWidth: "4′" },
   { id: 'G1', displayName: 'Section G1', dbSection: 'G', westRoad: 'Gardenia',   eastRoad: 'Gladiola',   color: 'from-violet-500 to-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', maxRow: 182, splitRow: 91,  positionsPerRow: 4, rowStart: 1,   rowEnd: 182, plotWidth: "5′" },
   { id: 'G2', displayName: 'Section G2', dbSection: 'G', westRoad: 'Gladiola',   eastRoad: 'Heather',    color: 'from-fuchsia-500 to-fuchsia-700', bgColor: 'bg-fuchsia-50', borderColor: 'border-fuchsia-200', maxRow: 386, splitRow: 284, positionsPerRow: 4, rowStart: 183, rowEnd: 386, plotWidth: "5′" },
   { id: 'H1', displayName: 'Section H1', dbSection: 'H', westRoad: 'Heather',    eastRoad: 'Hydrangea',  color: 'from-purple-500 to-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200', maxRow: 517, splitRow: 259, positionsPerRow: 4, rowStart: 1,   rowEnd: 517, plotWidth: "9′" },
@@ -257,27 +257,35 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
       const available = plots.filter(p => p.status === 'available').length;
       const reserved = plots.filter(p => p.status === 'reserved').length;
 
-      const rowBar = (row: number) => {
-        const rp = plotsByRow[row] || [];
-        const maxPos = Math.max(...rp.map(p => p.plot_position || 1), 1);
-        const occ = rp.filter(p => p.status === 'occupied').length;
-        const tot = rp.length;
-        const ratio = tot > 0 ? occ / tot : 0;
-        const color =
-          ratio >= 0.8 ? 'bg-rose-600' :
-          ratio >= 0.5 ? 'bg-rose-400' :
-          ratio >= 0.2 ? 'bg-amber-400' :
-          'bg-emerald-400';
-        const widthPct = Math.round((maxPos / 4) * 100);
-        return (
-          <div
-            key={row}
-            className={`${color} rounded-sm mb-px opacity-90`}
-            style={{ height: '2px', width: `${widthPct}%` }}
-            title={`Row ${row}: ${tot} plots (${occ} occupied)`}
-          />
-        );
-      };
+      // Render rows as heatmap bars with 5' path separators every 6 rows
+      const renderStripBars = (rows: number[]) =>
+        rows.map((row, idx) => {
+          const rp = plotsByRow[row] || [];
+          const maxPos = Math.max(...rp.map(p => p.plot_position || 1), 1);
+          const occ = rp.filter(p => p.status === 'occupied').length;
+          const tot = rp.length;
+          const ratio = tot > 0 ? occ / tot : 0;
+          const color =
+            ratio >= 0.8 ? 'bg-rose-600' :
+            ratio >= 0.5 ? 'bg-rose-400' :
+            ratio >= 0.2 ? 'bg-amber-400' :
+            'bg-emerald-400';
+          const widthPct = Math.round((maxPos / 4) * 100);
+          // Insert a path separator line after every 6th row (walkway between segments)
+          const needsSeparator = idx > 0 && idx % 6 === 0;
+          return (
+            <React.Fragment key={row}>
+              {needsSeparator && (
+                <div className="border-t border-dashed border-gray-400 my-0.5 opacity-60" title="5′ walkway" />
+              )}
+              <div
+                className={`${color} rounded-sm mb-px opacity-90`}
+                style={{ height: '2px', width: `${widthPct}%` }}
+                title={`Row ${row}: ${tot} plots (${occ} occupied)`}
+              />
+            </React.Fragment>
+          );
+        });
 
       return (
         <div
@@ -311,7 +319,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
           {/* Bounding Box Body */}
           <div className="flex-1 bg-white rounded-lg shadow-md p-1 border border-gray-200">
             <div className="text-[7px] text-gray-400 text-center mb-1 italic leading-tight">
-              Layout approximate<br />Detailed map pending
+              6 plots/row • paths every 6 rows<br />Detailed layout pending
             </div>
             <div className="flex gap-0.5 h-full">
               {/* West road */}
@@ -324,20 +332,20 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               {/* West strip heatmap (rows reversed: north at top) */}
               <div className={`flex-1 ${section.bgColor} rounded p-0.5 border ${section.borderColor} overflow-hidden`}>
                 <div className="text-[6px] text-center text-gray-500 mb-0.5">
-                  R{section.rowStart}–{section.splitRow}
+                  R{section.rowStart}–{section.splitRow} ↑
                 </div>
                 <div className="flex flex-col">
-                  {[...westStripRows].reverse().map(rowBar)}
+                  {renderStripBars([...westStripRows].reverse())}
                 </div>
               </div>
 
               {/* East strip heatmap */}
               <div className={`flex-1 ${section.bgColor} rounded p-0.5 border ${section.borderColor} overflow-hidden`}>
                 <div className="text-[6px] text-center text-gray-500 mb-0.5">
-                  R{section.splitRow + 1}–{section.rowEnd}
+                  R{section.splitRow + 1}–{section.rowEnd} ↓
                 </div>
                 <div className="flex flex-col">
-                  {eastStripRows.map(rowBar)}
+                  {renderStripBars(eastStripRows)}
                 </div>
               </div>
 
@@ -402,7 +410,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               </span>
             </div>
 
-            {/* West Strip - NO internal scrolling */}
+            {/* West Strip */}
             <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
               <div className="text-center mb-1">
                 <span className="text-[9px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
@@ -418,21 +426,23 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
               </div>
             </div>
 
-            {/* East Strip - NO internal scrolling */}
-            <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
-              <div className="text-center mb-1">
-                <span className="text-[9px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
-                  Rows {section.splitRow + 1}-{section.rowEnd} ↓
-                </span>
-              </div>
-              <div className="flex justify-start">
-                <div className="inline-block">
-                  {eastStripRows.map((row) =>
-                    renderRowMatrixAF(row, 'east', plotsByRow[row] || [], section.borderColor)
-                  )}
+            {/* East Strip - only shown when rows exist past the split */}
+            {eastStripRows.length > 0 && (
+              <div className={`flex-1 ${section.bgColor} rounded p-1 border ${section.borderColor}`}>
+                <div className="text-center mb-1">
+                  <span className="text-[9px] font-bold text-gray-700 bg-white/50 px-2 py-0.5 rounded-full">
+                    Rows {section.splitRow + 1}-{section.rowEnd} ↓
+                  </span>
+                </div>
+                <div className="flex justify-start">
+                  <div className="inline-block">
+                    {eastStripRows.map((row) =>
+                      renderRowMatrixAF(row, 'east', plotsByRow[row] || [], section.borderColor)
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* East Road Label */}
             <div className="w-8 flex-shrink-0 bg-amber-100 rounded flex items-center justify-center border border-amber-300">
