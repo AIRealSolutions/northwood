@@ -254,7 +254,7 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     // Heatmap bounding box for Perpetual Care sections (G/H)
     if (isGH) {
       const occupied = plots.filter(p => p.status === 'occupied').length;
-      const available = plots.filter(p => p.status === 'available').length;
+      const available = plots.filter(p => p.status === 'empty').length;
       const reserved = plots.filter(p => p.status === 'reserved').length;
 
       // Render rows as heatmap bars with 5' path separators every 6 rows
