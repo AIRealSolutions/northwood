@@ -138,6 +138,12 @@ export default function AdminDashboard() {
               icon="📋"
             />
             <ActionButton
+              href="/admin/cemetery-layout"
+              title="G-H Ownership Map"
+              description="Edit G-H matrices and join plots by historical ownership"
+              icon="🗺️"
+            />
+            <ActionButton
               href="/admin/moderation"
               title="Moderation Queue"
               description="Review pending content"
