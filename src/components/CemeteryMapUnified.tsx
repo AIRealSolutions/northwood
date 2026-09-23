@@ -182,22 +182,21 @@ export default function CemeteryMapUnified({ highlightPlot }: CemeteryMapUnified
     rowPlots: PlotWithDetails[],
     sectionColor: string
   ) => {
-    const positions = [1, 2, 3, 4, 5, 6, 7, 8];
-    const pairs = [
-      { label: 'I', positions: [1, 2] },
-      { label: 'II', positions: [3, 4] },
-      { label: 'III', positions: [5, 6] },
-      { label: 'IV', positions: [7, 8] },
-    ];
-    const orderedPairs = facingDirection === 'west' ? pairs : [...pairs].reverse();
+    // Sections A-F use the historic 4x2 numbering pattern.
+    // Ascending / west strip (top to bottom): 1-5, 2-6, 3-7, 4-8.
+    // Descending / east strip (top to bottom): 8-4, 7-3, 6-2, 5-1.
+    // G/H are rendered separately by renderRowMatrixGH and are intentionally unchanged.
+    const orderedPairs = facingDirection === 'west'
+      ? [[1, 5], [2, 6], [3, 7], [4, 8]]
+      : [[8, 4], [7, 3], [6, 2], [5, 1]];
 
     return (
       <div className="mb-1" key={row}>
         <div className="text-[7px] text-gray-500 mb-0.5">R{row}</div>
         <div className={`bg-white rounded border ${sectionColor} p-0.5`}>
           {orderedPairs.map((pair) => (
-            <div key={pair.label} className="flex gap-0.5 mb-0.5 last:mb-0">
-              {pair.positions.map((pos) => {
+            <div key={`${pair[0]}-${pair[1]}`} className="flex gap-0.5 mb-0.5 last:mb-0">
+              {pair.map((pos) => {
                 const plot = rowPlots.find(p => p.plot_position === pos);
                 if (!plot) {
                   return (
